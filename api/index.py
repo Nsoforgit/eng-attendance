@@ -26,15 +26,31 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database Setup: Uses Supabase PostgreSQL in production if DATABASE_URL is set,
-# otherwise falls back to /tmp/eng_attendance.db on serverless or local SQLite
+# with automatic fallback to local/serverless SQLite if direct IPv6 host is unreachable.
 RAW_DB_URL = os.getenv("DATABASE_URL", "").strip()
 if RAW_DB_URL.startswith("postgres://"):
     RAW_DB_URL = RAW_DB_URL.replace("postgres://", "postgresql://", 1)
 
+ACTIVE_DB_LABEL = "SQLite (Serverless/Local)"
+engine = None
+
 if RAW_DB_URL:
-    DATABASE_URL = RAW_DB_URL
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
-else:
+    try:
+        test_engine = create_engine(
+            RAW_DB_URL,
+            pool_pre_ping=True,
+            pool_recycle=300,
+            connect_args={"connect_timeout": 5},
+        )
+        with test_engine.connect() as conn:
+            pass
+        engine = test_engine
+        DATABASE_URL = RAW_DB_URL
+        ACTIVE_DB_LABEL = "PostgreSQL (Supabase Production)"
+    except Exception as db_err:
+        print(f"Supabase direct connection notice ({db_err}); using resilient fallback.")
+
+if engine is None:
     db_path = "/tmp/eng_attendance.db" if os.name != "nt" else "./eng_attendance.db"
     DATABASE_URL = f"sqlite:///{db_path}"
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -457,10 +473,9 @@ router = APIRouter()
 @router.get("/health")
 @router.get("/api/health")
 def health_check(db: Session = Depends(get_db)):
-    db_type = "PostgreSQL (Supabase Production)" if "postgresql" in DATABASE_URL else "SQLite (Serverless/Local)"
     return {
         "status": "ok",
-        "database_engine": db_type,
+        "database_engine": ACTIVE_DB_LABEL,
         "supported_levels": [300, 400, 500],
         "departments_count": db.query(Department).count(),
         "courses_count": db.query(Course).count(),
