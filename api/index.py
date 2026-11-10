@@ -447,7 +447,13 @@ class OfflineBulkSyncRequest(BaseModel):
 # API ENDPOINTS
 # =====================================================================
 
-@app.get("/api/health")
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+@router.get("/health")
+@router.get("/api/health")
 def health_check(db: Session = Depends(get_db)):
     db_type = "PostgreSQL (Supabase Production)" if "postgresql" in DATABASE_URL else "SQLite (Serverless/Local)"
     return {
@@ -460,7 +466,8 @@ def health_check(db: Session = Depends(get_db)):
     }
 
 
-@app.get("/api/departments")
+@router.get("/departments")
+@router.get("/api/departments")
 def list_departments(db: Session = Depends(get_db)):
     depts = db.query(Department).order_by(Department.code).all()
     result = []
@@ -480,7 +487,8 @@ def list_departments(db: Session = Depends(get_db)):
     return result
 
 
-@app.post("/api/departments")
+@router.post("/departments")
+@router.post("/api/departments")
 def register_department(payload: DepartmentCreate, db: Session = Depends(get_db)):
     code = payload.code.strip().upper()
     existing = db.query(Department).filter(Department.code == code).first()
@@ -502,7 +510,8 @@ def register_department(payload: DepartmentCreate, db: Session = Depends(get_db)
     }}
 
 
-@app.get("/api/courses")
+@router.get("/courses")
+@router.get("/api/courses")
 def list_courses(
     department_id: Optional[int] = Query(None),
     level: Optional[int] = Query(None),
@@ -535,7 +544,8 @@ def list_courses(
     return out
 
 
-@app.post("/api/courses")
+@router.post("/courses")
+@router.post("/api/courses")
 def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
     if payload.level not in (300, 400, 500):
         raise HTTPException(
@@ -558,7 +568,8 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
     return {"message": f"Course {c.course_code} added.", "id": c.id}
 
 
-@app.get("/api/students")
+@router.get("/students")
+@router.get("/api/students")
 def list_students(
     department_id: Optional[int] = Query(None),
     level: Optional[int] = Query(None),
@@ -592,7 +603,8 @@ def list_students(
     return result
 
 
-@app.post("/api/students/enroll")
+@router.post("/students/enroll")
+@router.post("/api/students/enroll")
 def enroll_student_biometrics(payload: StudentEnrollRequest, db: Session = Depends(get_db)):
     if payload.level not in (300, 400, 500):
         raise HTTPException(status_code=400, detail="Student level must be 300, 400, or 500.")
@@ -644,7 +656,8 @@ def enroll_student_biometrics(payload: StudentEnrollRequest, db: Session = Depen
     }
 
 
-@app.post("/api/sessions")
+@router.post("/sessions")
+@router.post("/api/sessions")
 def start_lecture_session(payload: SessionCreateRequest, db: Session = Depends(get_db)):
     course = db.query(Course).filter(Course.id == payload.course_id).first()
     if not course:
@@ -685,7 +698,8 @@ def start_lecture_session(payload: SessionCreateRequest, db: Session = Depends(g
     }
 
 
-@app.get("/api/sessions")
+@router.get("/sessions")
+@router.get("/api/sessions")
 def list_sessions(
     department_id: Optional[int] = Query(None),
     course_id: Optional[int] = Query(None),
@@ -726,7 +740,8 @@ def list_sessions(
     return out
 
 
-@app.post("/api/sessions/{session_uid}/close")
+@router.post("/sessions/{session_uid}/close")
+@router.post("/api/sessions/{session_uid}/close")
 def close_session(session_uid: str, db: Session = Depends(get_db)):
     sess = db.query(LectureSession).filter(LectureSession.session_uid == session_uid).first()
     if not sess:
@@ -812,13 +827,15 @@ def _process_single_checkin(item: BiometricCheckInRequest, db: Session) -> Dict[
     }
 
 
-@app.post("/api/attendance/checkin")
+@router.post("/attendance/checkin")
+@router.post("/api/attendance/checkin")
 def check_in_student(payload: BiometricCheckInRequest, db: Session = Depends(get_db)):
     result = _process_single_checkin(payload, db)
     return {"message": f"Biometric attendance verified for {result['full_name']}", "record": result}
 
 
-@app.post("/api/attendance/sync-offline")
+@router.post("/attendance/sync-offline")
+@router.post("/api/attendance/sync-offline")
 def sync_offline_attendance(payload: OfflineBulkSyncRequest, db: Session = Depends(get_db)):
     synced = []
     errors = []
@@ -840,7 +857,8 @@ def sync_offline_attendance(payload: OfflineBulkSyncRequest, db: Session = Depen
     }
 
 
-@app.get("/api/hod/eligibility")
+@router.get("/hod/eligibility")
+@router.get("/api/hod/eligibility")
 def hod_exam_eligibility_report(
     department_id: int = Query(...),
     level: Optional[int] = Query(None),
@@ -890,7 +908,6 @@ def hod_exam_eligibility_report(
 
             classes_needed = 0
             if not is_eligible and total_sessions > 0:
-                # Calculate minimum consecutive classes needed or shortfall
                 target = math.ceil((dept.min_attendance_pct / 100.0) * total_sessions)
                 classes_needed = max(0, target - attended)
 
@@ -937,7 +954,8 @@ def hod_exam_eligibility_report(
     }
 
 
-@app.get("/api/student/lookup")
+@router.get("/student/lookup")
+@router.get("/api/student/lookup")
 def student_personal_status(matric_no: str = Query(...), db: Session = Depends(get_db)):
     matric = matric_no.strip().upper()
     st = db.query(Student).filter(Student.matric_no == matric).first()
@@ -982,3 +1000,7 @@ def student_personal_status(matric_no: str = Query(...), db: Session = Depends(g
         },
         "courses": course_breakdown,
     }
+
+
+app.include_router(router)
+
