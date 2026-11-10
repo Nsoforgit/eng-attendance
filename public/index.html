@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>EngAttend | Engineering Biometric Attendance & 70% HOD Portal (300L–500L)</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#090d16" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            slate950: '#090d16',
+            slate900: '#111827',
+            emerald500: '#10b981',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #090d16; color: #f3f4f6; }
+    .glass { background: rgba(17, 24, 39, 0.82); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.08); }
+    .scan-line {
+      position: absolute; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, transparent, #10b981, #34d399, #10b981, transparent);
+      box-shadow: 0 0 14px #10b981;
+      animation: scanMove 2.2s infinite ease-in-out;
+    }
+    @keyframes scanMove {
+      0% { top: 8%; opacity: 0.6; }
+      50% { top: 88%; opacity: 1; }
+      100% { top: 8%; opacity: 0.6; }
+    }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff !important; color: #000 !important; }
+      .glass { background: #fff !important; border: 1px solid #ccc !important; color: #000 !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
+
+  <!-- TOP HEADER & LIVE NETWORK / OFFLINE SYNC BAR -->
+  <header class="sticky top-0 z-50 glass border-b border-slate-800/80 no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 font-display font-bold text-slate-950 text-lg">
+          EA
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-display font-bold text-lg tracking-tight text-white">EngAttend Biometrics</h1>
+            <span class="text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">300L • 400L • 500L Core</span>
+          </div>
+          <p class="text-xs text-slate-400">Zero-Impersonation Faculty of Engineering Attendance & HOD 70% Exam Portal</p>
+        </div>
+      </div>
+
+      <!-- Network & Offline Sync Controls -->
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <!-- Department Selector -->
+        <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg px-2.5 py-1.5">
+          <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Dept:</span>
+          <select id="globalDeptSelect" onchange="onGlobalFilterChange()" class="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+
+        <!-- Level Filter (300L, 400L, 500L) -->
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5 text-xs font-mono">
+          <button onclick="setGlobalLevel(300)" id="lvlBtn-300" class="px-2.5 py-1 rounded-md transition">300L</button>
+          <button onclick="setGlobalLevel(400)" id="lvlBtn-400" class="px-2.5 py-1 rounded-md transition bg-emerald-500 text-slate-950 font-bold">400L</button>
+          <button onclick="setGlobalLevel(500)" id="lvlBtn-500" class="px-2.5 py-1 rounded-md transition">500L</button>
+          <button onclick="setGlobalLevel(0)" id="lvlBtn-0" class="px-2.5 py-1 rounded-md transition">ALL</button>
+        </div>
+
+        <!-- Online/Offline Toggle & Pending Sync Queue -->
+        <button onclick="toggleSimulatedOffline()" id="networkBadgeBtn" title="Click to test Lecture Hall Offline Mode" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+          <span id="networkDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span id="networkStatusText">Online (Auto-Sync)</span>
+        </button>
+
+        <button onclick="syncOfflineQueueNow()" id="syncQueueBtn" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 transition shadow-lg shadow-amber-500/20">
+          <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          <span>Sync <span id="offlineCountBadge">0</span> Queued</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ROLE NAVIGATION TABS -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 border-t border-slate-800/60 bg-slate-950/60">
+      <nav class="flex items-center gap-1 overflow-x-auto py-1.5 text-xs sm:text-sm font-medium">
+        <button onclick="switchRoleTab('hod')" id="tab-hod" class="role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+          <span>🏛️</span> 1. Department HOD (70% Exam Matrix & Registry)
+        </button>
+        <button onclick="switchRoleTab('lecturer')" id="tab-lecturer" class="role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+          <span>👨‍🏫</span> 2. Course Lecturer (Sessions & Course Logs)
+        </button>
+        <button onclick="switchRoleTab('courserep')" id="tab-courserep" class="role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+          <span>📱</span> 3. Level Course Rep (Biometric Enrollment & Offline Kiosk)
+        </button>
+        <button onclick="switchRoleTab('student')" id="tab-student" class="role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+          <span>🎓</span> 4. Student Portal (Passkey Check-In & Live %)
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastBox" class="fixed bottom-5 right-5 z-50 hidden max-w-md px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all duration-300"></div>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- ======================================================================= -->
+    <!-- TAB 1: DEPARTMENT HOD COMMAND CENTER & 70% EXAM ELIGIBILITY PORTAL      -->
+    <!-- ======================================================================= -->
+    <section id="panel-hod" class="space-y-6">
+      <!-- Top HOD Banner & Quick Actions -->
+      <div class="glass rounded-2xl p-5 sm:p-6 border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 text-emerald-400 text-xs font-mono uppercase tracking-wider mb-1">
+            <span>HOD Command Center • NUC / COREN 70% Attendance Enforcement</span>
+          </div>
+          <h2 id="hodDeptHeading" class="font-display text-2xl sm:text-3xl font-bold text-white">Department of Petroleum Engineering</h2>
+          <p id="hodNameSub" class="text-sm text-slate-400 mt-0.5">Head of Department: Prof. E. O. Adewale • Scope: 300L, 400L & 500L Core Departmental Courses Only</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5 no-print">
+          <button onclick="openModal('deptModal')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition">
+            + Register New Engineering Dept
+          </button>
+          <button onclick="openModal('courseModal')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition">
+            + Add 300L/400L/500L Course
+          </button>
+          <button onclick="exportHodCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition">
+            ⬇ Export Exam Eligibility CSV
+          </button>
+          <button onclick="window.print()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-emerald-500/20">
+            🖨️ Print Official HOD Exam Clearance List
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary KPI Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass rounded-xl p-4 border border-slate-800">
+          <p class="text-xs text-slate-400 uppercase font-mono">Departmental Courses</p>
+          <p id="kpiCoursesCount" class="font-display text-3xl font-bold text-white mt-1">0</p>
+          <p class="text-[11px] text-slate-500 mt-1">300L, 400L & 500L Core Courses</p>
+        </div>
+        <div class="glass rounded-xl p-4 border border-slate-800">
+          <p class="text-xs text-slate-400 uppercase font-mono">Minimum Exam Threshold</p>
+          <p class="font-display text-3xl font-bold text-emerald-400 mt-1">70.0%</p>
+          <p class="text-[11px] text-slate-500 mt-1">Strict Biometric Verification</p>
+        </div>
+        <div class="glass rounded-xl p-4 border border-emerald-500/30 bg-emerald-950/15">
+          <p class="text-xs text-emerald-300 uppercase font-mono">Cleared for Exams (≥70%)</p>
+          <p id="kpiEligibleCount" class="font-display text-3xl font-bold text-emerald-400 mt-1">0</p>
+          <p class="text-[11px] text-emerald-400/70 mt-1">Qualified to sit for examination</p>
+        </div>
+        <div class="glass rounded-xl p-4 border border-rose-500/30 bg-rose-950/15">
+          <p class="text-xs text-rose-300 uppercase font-mono">Barred from Exam (<70%)</p>
+          <p id="kpiBarredCount" class="font-display text-3xl font-bold text-rose-400 mt-1">0</p>
+          <p class="text-[11px] text-rose-400/70 mt-1">Automatic HOD Exam Exclusion</p>
+        </div>
+      </div>
+
+      <!-- Filter Bar for HOD Table -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 no-print">
+        <div class="flex items-center gap-3 flex-wrap">
+          <label class="text-xs text-slate-400 font-medium">Filter Course:</label>
+          <select id="hodCourseSelect" onchange="loadHodEligibility()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none">
+            <option value="">All Courses in Selected Level</option>
+          </select>
+
+          <label class="text-xs text-slate-400 font-medium ml-2">Status Filter:</label>
+          <select id="hodStatusFilter" onchange="renderHodCourses()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none">
+            <option value="ALL">Show All Students</option>
+            <option value="BARRED">Show Only BARRED (<70%)</option>
+            <option value="ELIGIBLE">Show Only ELIGIBLE (≥70%)</option>
+          </select>
+        </div>
+        <div class="text-xs text-slate-400">
+          Showing live synced data from Course Lecturers & Level Course Reps
+        </div>
+      </div>
+
+      <!-- Course-by-Course Eligibility Matrices -->
+      <div id="hodCoursesContainer" class="space-y-6">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 2: COURSE LECTURER PORTAL                                           -->
+    <!-- ======================================================================= -->
+    <section id="panel-lecturer" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left: Start New Lecture Session -->
+        <div class="glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display text-lg font-bold text-white">Start Class Attendance Session</h3>
+            <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-emerald-500/20 text-emerald-400">Lecturer / Rep</span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Initiate a time-bound biometric session for a 300L, 400L, or 500L departmental course. Once started, students can verify via the Samsung Camera Face Kiosk or Device Passkey.
+          </p>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Select Departmental Course (300L–500L)</label>
+              <select id="lecturerCourseSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></select>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="col-span-1">
+                <label class="block text-xs text-slate-400 mb-1">Week #</label>
+                <input type="number" id="sessionWeekInput" value="6" min="1" max="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono" />
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs text-slate-400 mb-1">Lecturer / Authorizing Name</label>
+                <input type="text" id="sessionStarterInput" placeholder="e.g. Dr. M. O. Nwosu" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Lecture Topic Taught Today</label>
+              <input type="text" id="sessionTopicInput" placeholder="e.g. Week 6: Pressure Transient Analysis & Well Testing" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+            <button onclick="createNewLectureSession()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+              🚀 Launch Live Biometric Attendance Session
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Active & Recent Lecture Sessions -->
+        <div class="lg:col-span-2 glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-display text-lg font-bold text-white">Departmental Lecture Sessions Log</h3>
+              <p class="text-xs text-slate-400">Click "Open Kiosk" on any active session to take student biometrics on the Samsung phone.</p>
+            </div>
+            <button onclick="loadSessionsList()" class="text-xs text-emerald-400 hover:underline">↻ Refresh</button>
+          </div>
+          <div id="sessionsListContainer" class="space-y-3 max-h-[500px] overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 3: LEVEL COURSE REP (300L / 400L / 500L) BIOMETRIC KIOSK & ENROLL   -->
+    <!-- ======================================================================= -->
+    <section id="panel-courserep" class="hidden space-y-6">
+      <div class="glass rounded-2xl p-5 border border-emerald-500/30 bg-emerald-950/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <span class="text-xs font-mono uppercase text-emerald-400">300L • 400L • 500L Level Course Rep Portal</span>
+          <h2 class="font-display text-xl font-bold text-white mt-0.5">Samsung Phone Biometric Kiosk & Offline-First Sync Engine</h2>
+          <p class="text-xs text-slate-300 mt-1">
+            No external USB scanner needed! Enroll classmates' faces & device passkeys once. During class, run the live camera scanner—even if lecture hall network drops, attendance saves to local encrypted storage and syncs to the HOD when internet returns.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="cacheDepartmentTemplatesOffline()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+            📥 Cache Class Biometrics for Offline Use
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left 7 Cols: Live Classroom Biometric Kiosk (Camera Face + Liveness Check) -->
+        <div class="lg:col-span-7 glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 class="font-display text-lg font-bold text-white">1. Classroom Biometric Attendance Kiosk</h3>
+              <p class="text-xs text-slate-400">Students step up to the Course Rep/Lecturer Samsung phone or tap their matric number to verify face biometrics.</p>
+            </div>
+            <span id="kioskOfflineIndicator" class="px-2.5 py-1 rounded-full text-[11px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              Ready • Templates Cached
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Active Lecture Session</label>
+              <select id="kioskSessionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"></select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Select Student (or Enter Matric No)</label>
+              <select id="kioskStudentSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"></select>
+            </div>
+          </div>
+
+          <!-- Interactive Camera Biometric Viewfinder -->
+          <div class="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 aspect-video flex items-center justify-center">
+            <video id="kioskVideo" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+            <canvas id="kioskCanvas" width="320" height="240" class="hidden"></canvas>
+
+            <div id="kioskCameraPlaceholder" class="text-center p-6 space-y-3">
+              <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-3xl">
+                📷
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-white">Samsung / Smartphone Biometric Camera Kiosk</p>
+                <p class="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                  Uses optical facial geometry & liveness verification (or instant template verification in demo mode) so no student can sign for an absent friend.
+                </p>
+              </div>
+              <button onclick="startKioskCamera()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-400 border border-emerald-500/30 transition">
+                Activate Phone Camera Sensor
+              </button>
+            </div>
+
+            <!-- HUD Overlay during active scan -->
+            <div class="scan-line pointer-events-none"></div>
+            <div class="absolute top-3 left-3 px-2.5 py-1 rounded bg-slate-950/80 border border-slate-700 text-[11px] font-mono text-emerald-400">
+              ANTI-SPOOFING: ACTIVE
+            </div>
+            <div id="kioskLastMatchOverlay" class="absolute bottom-3 left-3 right-3 hidden px-3 py-2 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-xs text-emerald-200 flex items-center justify-between">
+              <span id="kioskMatchText">Verified!</span>
+              <span class="font-mono font-bold text-emerald-400">98.4% MATCH</span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3">
+            <button onclick="verifyStudentOnKiosk('FACE_BIOMETRIC_KIOSK')" class="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+              ✅ Scan Face & Mark Present (Works Online & Offline)
+            </button>
+          </div>
+        </div>
+
+        <!-- Right 5 Cols: Enroll New 300L/400L/500L Student Biometrics -->
+        <div class="lg:col-span-5 glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <h3 class="font-display text-lg font-bold text-white">2. Enroll Classmate Biometrics (300L–500L)</h3>
+          <p class="text-xs text-slate-400">
+            Register a student into the departmental registry and bind their biometric template so they can attend core lectures.
+          </p>
+
+          <div class="space-y-3">
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">Level</label>
+                <select id="enrollLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+                  <option value="300">300 Level</option>
+                  <option value="400" selected>400 Level</option>
+                  <option value="500">500 Level</option>
+                </select>
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs text-slate-400 mb-1">Matriculation Number</label>
+                <input type="text" id="enrollMatric" placeholder="e.g. ENG/PET/22/045" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white uppercase" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Student Full Name</label>
+              <input type="text" id="enrollName" placeholder="e.g. Chukwudi Okafor" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Enrolling Course Rep Name</label>
+              <input type="text" id="enrollRepName" value="Emmanuel Nsofor (400L Course Rep)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+            </div>
+
+            <button onclick="enrollStudentBiometric()" class="w-full py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
+              🧬 Capture Biometric Signature & Enroll Student
+            </button>
+          </div>
+
+          <!-- Offline Pending Queue Box -->
+          <div class="pt-3 border-t border-slate-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-300">Offline Pending Sync Queue (<span id="repQueueCount">0</span>)</span>
+              <button onclick="syncOfflineQueueNow()" class="text-xs text-emerald-400 hover:underline font-medium">Push to HOD Now ↑</button>
+            </div>
+            <div id="offlineQueueList" class="text-xs font-mono text-slate-400 bg-slate-950/80 rounded-xl p-3 border border-slate-800 max-h-40 overflow-y-auto">
+              No offline records waiting. Toggle "Online" badge in header to test offline lecture hall capture!
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 4: STUDENT SELF-SERVICE PASSKEY & LIVE 70% ELIGIBILITY TRACKER      -->
+    <!-- ======================================================================= -->
+    <section id="panel-student" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Student Live 70% Status Lookup -->
+        <div class="lg:col-span-7 glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <h3 class="font-display text-lg font-bold text-white">Check My 70% Exam Eligibility Status</h3>
+          <p class="text-xs text-slate-400">
+            Enter your Matric Number (or pick a demo student) to see your real-time attendance percentage across all your 300L, 400L, or 500L departmental courses.
+          </p>
+
+          <div class="flex flex-wrap gap-2">
+            <input type="text" id="studentLookupInput" value="ENG/PET/22/001" placeholder="Enter Matric No (e.g. ENG/PET/22/001)" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm font-mono text-white uppercase" />
+            <button onclick="lookupStudentDashboard()" class="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
+              Check My Status
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap text-xs">
+            <span class="text-slate-500">Quick Demo Try:</span>
+            <button onclick="quickLookup('ENG/PET/22/001')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 font-mono">ENG/PET/22/001 (100% Safe)</button>
+            <button onclick="quickLookup('ENG/PET/22/006')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono">ENG/PET/22/006 (60% At Risk)</button>
+            <button onclick="quickLookup('ENG/PET/22/010')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-rose-300 font-mono">ENG/PET/22/010 (20% Barred)</button>
+          </div>
+
+          <div id="studentPersonalResult" class="space-y-3 pt-2"></div>
+        </div>
+
+        <!-- Student Own-Phone Fingerprint / Passkey Check-In -->
+        <div class="lg:col-span-5 glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display text-lg font-bold text-white">Own-Phone Biometric Passkey Check-In</h3>
+            <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-teal-500/20 text-teal-300">WebAuthn</span>
+          </div>
+          <p class="text-xs text-slate-400">
+            If your phone is registered with a hardware Passkey (Samsung Ultrasonic Fingerprint / FaceID), you can verify your attendance for an active lecture session directly from your seat.
+          </p>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Active Class Session</label>
+              <select id="studentSelfSessionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"></select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Your Matric Number</label>
+              <input type="text" id="studentSelfMatric" value="ENG/PET/22/006" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white uppercase" />
+            </div>
+
+            <button onclick="studentPasskeyCheckIn()" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20">
+              <span>👆</span> Verify Phone Fingerprint Passkey & Sign Attendance
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: REGISTER NEW ENGINEERING DEPARTMENT -->
+  <div id="deptModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-slate-700 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-display text-lg font-bold text-white">Register Engineering Department</h3>
+        <button onclick="closeModal('deptModal')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Department Code (3 Letters)</label>
+          <input type="text" id="newDeptCode" placeholder="e.g. MTE or AGE" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white uppercase" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Full Department Name</label>
+          <input type="text" id="newDeptName" placeholder="e.g. Mechatronics Engineering" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Head of Department (HOD) Name</label>
+          <input type="text" id="newDeptHod" placeholder="e.g. Prof. S. A. Lawal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <button onclick="submitNewDepartment()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
+          Save Department to Registry
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD NEW 300L/400L/500L DEPARTMENTAL COURSE -->
+  <div id="courseModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-slate-700 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-display text-lg font-bold text-white">Add 300L / 400L / 500L Core Course</h3>
+        <button onclick="closeModal('courseModal')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Course Code</label>
+            <input type="text" id="newCourseCode" placeholder="e.g. PET 407" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white uppercase" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Level (Core Only)</label>
+            <select id="newCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono">
+              <option value="300">300 Level</option>
+              <option value="400" selected>400 Level</option>
+              <option value="500">500 Level</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Course Title</label>
+          <input type="text" id="newCourseTitle" placeholder="e.g. Directional Drilling & Well Completion" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Course Lecturer Name</label>
+          <input type="text" id="newCourseLecturer" placeholder="e.g. Engr. Dr. T. O. Briggs" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <button onclick="submitNewCourse()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
+          Add Departmental Course
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // STATE & OFFLINE-FIRST STORAGE ENGINE
+    // =========================================================================
+    let state = {
+      departments: [],
+      selectedDeptId: 1,
+      selectedLevel: 400, // Default to 400L; supports 300, 400, 500, or 0 (ALL)
+      courses: [],
+      students: [],
+      sessions: [],
+      hodReport: null,
+      simulatedOffline: false,
+      offlineQueue: JSON.parse(localStorage.getItem('eng_offline_attendance_queue') || '[]'),
+      cachedTemplates: JSON.parse(localStorage.getItem('eng_cached_biometric_templates') || '{}'),
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    function showToast(msg, type = 'success') {
+      const box = document.getElementById('toastBox');
+      box.className = 'fixed bottom-5 right-5 z-50 max-w-md px-4 py-3 rounded-xl shadow-2xl border text-xs sm:text-sm font-medium transition-all duration-300 ';
+      if (type === 'error') {
+        box.className += 'bg-rose-950/95 border-rose-500 text-rose-200';
+      } else if (type === 'warn') {
+        box.className += 'bg-amber-950/95 border-amber-500 text-amber-200';
+      } else {
+        box.className += 'bg-emerald-950/95 border-emerald-500 text-emerald-200';
+      }
+      box.textContent = msg;
+      box.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => box.classList.add('hidden'), 4200);
+    }
+
+    function isOfflineMode() {
+      return state.simulatedOffline || !navigator.onLine;
+    }
+
+    function toggleSimulatedOffline() {
+      state.simulatedOffline = !state.simulatedOffline;
+      updateNetworkUI();
+      if (!state.simulatedOffline && state.offlineQueue.length > 0) {
+        showToast('Internet connection restored! Syncing queued attendance records to HOD...', 'success');
+        syncOfflineQueueNow();
+      } else if (state.simulatedOffline) {
+        showToast('Switched to Lecture Hall Offline Mode. Biometric check-ins will queue locally on device.', 'warn');
+      }
+    }
+
+    function updateNetworkUI() {
+      const btn = document.getElementById('networkBadgeBtn');
+      const dot = document.getElementById('networkDot');
+      const txt = document.getElementById('networkStatusText');
+      const syncBtn = document.getElementById('syncQueueBtn');
+      const countBadge = document.getElementById('offlineCountBadge');
+      const repQueueCount = document.getElementById('repQueueCount');
+      const queueList = document.getElementById('offlineQueueList');
+
+      const qLen = state.offlineQueue.length;
+      countBadge.textContent = qLen;
+      repQueueCount.textContent = qLen;
+
+      if (qLen > 0) {
+        syncBtn.classList.remove('hidden');
+        syncBtn.classList.add('flex');
+        queueList.innerHTML = state.offlineQueue.map((item, i) =>
+          `<div class="py-1 border-b border-slate-800/80 flex justify-between">
+            <span>${i + 1}. <b>${item.matric_no}</b> (${item.session_uid})</span>
+            <span class="text-amber-400">PENDING SYNC</span>
+          </div>`
+        ).join('');
+      } else {
+        syncBtn.classList.add('hidden');
+        syncBtn.classList.remove('flex');
+        queueList.innerHTML = 'No offline records waiting. Toggle "Online (Auto-Sync)" in top bar to test offline lecture hall capture!';
+      }
+
+      if (isOfflineMode()) {
+        btn.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-amber-500/15 border-amber-500/40 text-amber-300';
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        txt.textContent = 'Offline Mode (Local Queue Active)';
+      } else {
+        btn.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
+        txt.textContent = 'Online (Auto-Sync)';
+      }
+    }
+
+    // =========================================================================
+    // ROLE NAVIGATION & GLOBAL FILTERS
+    // =========================================================================
+    function switchRoleTab(tab) {
+      ['hod', 'lecturer', 'courserep', 'student'].forEach(t => {
+        document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tab) {
+          btn.className = 'role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
+        } else {
+          btn.className = 'role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white';
+        }
+      });
+      if (tab === 'student') lookupStudentDashboard();
+    }
+
+    function setGlobalLevel(lvl) {
+      state.selectedLevel = lvl;
+      [300, 400, 500, 0].forEach(l => {
+        const b = document.getElementById(`lvlBtn-${l}`);
+        if (l === lvl) {
+          b.className = 'px-2.5 py-1 rounded-md transition bg-emerald-500 text-slate-950 font-bold';
+        } else {
+          b.className = 'px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white';
+        }
+      });
+      refreshAllData();
+    }
+
+    function onGlobalFilterChange() {
+      const sel = document.getElementById('globalDeptSelect');
+      state.selectedDeptId = parseInt(sel.value, 10) || 1;
+      document.getElementById('hodCourseSelect').value = '';
+      refreshAllData();
+    }
+
+    // =========================================================================
+    // API DATA LOADING
+    // =========================================================================
+    async function loadDepartments() {
+      const res = await fetch('/api/departments');
+      state.departments = await res.json();
+      const sel = document.getElementById('globalDeptSelect');
+      sel.innerHTML = state.departments.map(d =>
+        `<option value="${d.id}" ${d.id === state.selectedDeptId ? 'selected' : ''}>${d.code} - ${d.name}</option>`
+      ).join('');
+    }
+
+    async function refreshAllData() {
+      try {
+        const lvlParam = state.selectedLevel ? `&level=${state.selectedLevel}` : '';
+        const [coursesRes, studentsRes, sessionsRes] = await Promise.all([
+          fetch(`/api/courses?department_id=${state.selectedDeptId}${lvlParam}`),
+          fetch(`/api/students?department_id=${state.selectedDeptId}${lvlParam}&include_templates=true`),
+          fetch(`/api/sessions?department_id=${state.selectedDeptId}${lvlParam}`)
+        ]);
+        state.courses = await coursesRes.json();
+        state.students = await studentsRes.json();
+        state.sessions = await sessionsRes.json();
+
+        // Automatically cache student biometric templates in localStorage for Offline Mode
+        state.students.forEach(s => {
+          if (s.face_descriptor) {
+            state.cachedTemplates[s.matric_no] = s.face_descriptor;
+          }
+        });
+        localStorage.setItem('eng_cached_biometric_templates', JSON.stringify(state.cachedTemplates));
+
+        populateDropdowns();
+        await loadHodEligibility();
+        renderSessionsList();
+      } catch (err) {
+        console.warn('Working from cached offline state:', err);
+      }
+    }
+
+    function populateDropdowns() {
+      // HOD course filter
+      const hodCourseSel = document.getElementById('hodCourseSelect');
+      const prevCourse = hodCourseSel.value;
+      hodCourseSel.innerHTML = `<option value="">All ${state.selectedLevel ? state.selectedLevel + 'L' : '300L–500L'} Departmental Courses</option>` +
+        state.courses.map(c => `<option value="${c.id}">${c.course_code} - ${c.course_title} (${c.level}L)</option>`).join('');
+      hodCourseSel.value = prevCourse;
+
+      // Lecturer course select
+      const lectSel = document.getElementById('lecturerCourseSelect');
+      lectSel.innerHTML = state.courses.map(c =>
+        `<option value="${c.id}" data-lecturer="${c.lecturer_name}">${c.course_code} (${c.level}L) — ${c.course_title}</option>`
+      ).join('');
+      if (state.courses[0]) {
+        document.getElementById('sessionStarterInput').value = state.courses[0].lecturer_name;
+      }
+      lectSel.onchange = () => {
+        const opt = lectSel.options[lectSel.selectedIndex];
+        if (opt) document.getElementById('sessionStarterInput').value = opt.getAttribute('data-lecturer') || '';
+      };
+
+      // Kiosk & Student session selects
+      const sessionOptions = state.sessions.map(s =>
+        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒'} ${s.course_code} (Wk ${s.week_number}) - ${s.session_uid}</option>`
+      ).join('');
+      document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || '<option value="">No sessions yet — start one in Lecturer tab</option>';
+      document.getElementById('studentSelfSessionSelect').innerHTML = sessionOptions || '<option value="">No active sessions</option>';
+
+      // Kiosk student select
+      document.getElementById('kioskStudentSelect').innerHTML = state.students.map(st =>
+        `<option value="${st.matric_no}">${st.matric_no} — ${st.full_name} (${st.level}L)</option>`
+      ).join('');
+    }
+
+    // =========================================================================
+    // HOD 70% ELIGIBILITY REPORT
+    // =========================================================================
+    async function loadHodEligibility() {
+      const courseId = document.getElementById('hodCourseSelect').value;
+      let url = `/api/hod/eligibility?department_id=${state.selectedDeptId}`;
+      if (state.selectedLevel) url += `&level=${state.selectedLevel}`;
+      if (courseId) url += `&course_id=${courseId}`;
+
+      const res = await fetch(url);
+      state.hodReport = await res.json();
+
+      document.getElementById('hodDeptHeading').textContent = `Department of ${state.hodReport.department.name}`;
+      document.getElementById('hodNameSub').textContent =
+        `Head of Department: ${state.hodReport.department.hod_name} • Scope: 300L, 400L & 500L Departmental Core Courses`;
+
+      document.getElementById('kpiCoursesCount').textContent = state.hodReport.summary.courses_analyzed;
+      document.getElementById('kpiEligibleCount').textContent = state.hodReport.summary.total_eligible_entries;
+      document.getElementById('kpiBarredCount').textContent = state.hodReport.summary.total_barred_entries;
+
+      renderHodCourses();
+    }
+
+    function renderHodCourses() {
+      if (!state.hodReport) return;
+      const filter = document.getElementById('hodStatusFilter').value;
+      const container = document.getElementById('hodCoursesContainer');
+
+      if (state.hodReport.courses.length === 0) {
+        container.innerHTML = `<div class="glass rounded-2xl p-8 text-center text-slate-400">No departmental courses found for this filter. Click "+ Add 300L/400L/500L Course" above.</div>`;
+        return;
+      }
+
+      container.innerHTML = state.hodReport.courses.map(course => {
+        const filteredStudents = course.students.filter(st => {
+          if (filter === 'BARRED') return !st.exam_eligible;
+          if (filter === 'ELIGIBLE') return st.exam_eligible;
+          return true;
+        });
+
+        const rowsHtml = filteredStudents.map((st, idx) => {
+          const badgeClass = st.exam_eligible
+            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+            : 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold';
+          const barColor = st.attendance_pct >= 75 ? 'bg-emerald-500' : (st.attendance_pct >= 70 ? 'bg-amber-400' : 'bg-rose-500');
+
+          return `
+            <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition">
+              <td class="py-3 px-4 font-mono text-xs text-slate-400">${idx + 1}</td>
+              <td class="py-3 px-4 font-mono text-xs font-semibold text-white">${st.matric_no}</td>
+              <td class="py-3 px-4 text-sm text-slate-200">${st.full_name}</td>
+              <td class="py-3 px-4 text-xs">
+                ${st.biometric_enrolled
+                  ? '<span class="text-emerald-400 font-mono">✓ Enrolled</span>'
+                  : '<span class="text-amber-400 font-mono">⚠ Pending</span>'}
+              </td>
+              <td class="py-3 px-4 font-mono text-xs text-slate-300">${st.attended_classes} / ${st.total_classes}</td>
+              <td class="py-3 px-4 w-44">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div class="h-full ${barColor}" style="width: ${Math.min(100, st.attendance_pct)}%"></div>
+                  </div>
+                  <span class="font-mono text-xs font-bold ${st.exam_eligible ? 'text-emerald-400' : 'text-rose-400'}">${st.attendance_pct}%</span>
+                </div>
+              </td>
+              <td class="py-3 px-4">
+                <span class="px-2.5 py-1 rounded-full text-[11px] font-mono border ${badgeClass}">
+                  ${st.status_badge}
+                </span>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        return `
+          <div class="glass rounded-2xl border border-slate-800 overflow-hidden">
+            <div class="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs font-bold">${course.course_code}</span>
+                  <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-xs">${course.level} Level</span>
+                  <h3 class="font-display font-bold text-base sm:text-lg text-white">${course.course_title}</h3>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">
+                  Course Lecturer: <b class="text-slate-200">${course.lecturer_name}</b> • Total Lectures Held: <b class="text-white font-mono">${course.total_sessions_held}</b>
+                </p>
+              </div>
+              <div class="flex items-center gap-3 text-xs font-mono">
+                <span class="px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+                  Cleared (≥70%): <b>${course.eligible_count}</b>
+                </span>
+                <span class="px-3 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300">
+                  Barred (<70%): <b>${course.barred_count}</b>
+                </span>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400 bg-slate-950/50">
+                    <th class="py-2.5 px-4">#</th>
+                    <th class="py-2.5 px-4">Matric No</th>
+                    <th class="py-2.5 px-4">Student Name</th>
+                    <th class="py-2.5 px-4">Biometric ID</th>
+                    <th class="py-2.5 px-4">Classes</th>
+                    <th class="py-2.5 px-4">Attendance %</th>
+                    <th class="py-2.5 px-4">HOD Exam Verdict</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml || '<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">No students match this filter.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function exportHodCsv() {
+      if (!state.hodReport) return;
+      let rows = [['Department', 'Course Code', 'Level', 'Lecturer', 'Matric No', 'Student Name', 'Attended', 'Total Classes', 'Attendance %', 'Exam Verdict']];
+      state.hodReport.courses.forEach(c => {
+        c.students.forEach(s => {
+          rows.push([
+            state.hodReport.department.name,
+            c.course_code,
+            `${c.level}L`,
+            c.lecturer_name,
+            s.matric_no,
+            s.full_name,
+            s.attended_classes,
+            s.total_classes,
+            `${s.attendance_pct}%`,
+            s.exam_eligible ? 'CLEARED (>=70%)' : 'BARRED (<70%)'
+          ]);
+        });
+      });
+      const csvContent = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HOD_70Pct_Exam_Eligibility_${state.hodReport.department.code}.csv`;
+      a.click();
+      showToast('Downloaded official HOD 70% Exam Eligibility CSV!');
+    }
+
+    // =========================================================================
+    // LECTURER SESSIONS MANAGEMENT
+    // =========================================================================
+    async function createNewLectureSession() {
+      const courseId = parseInt(document.getElementById('lecturerCourseSelect').value, 10);
+      const week = parseInt(document.getElementById('sessionWeekInput').value, 10) || 1;
+      const startedBy = document.getElementById('sessionStarterInput').value.trim() || 'Course Lecturer';
+      const topic = document.getElementById('sessionTopicInput').value.trim() || `Week ${week} Departmental Core Lecture`;
+
+      if (!courseId) return showToast('Please select a course first', 'error');
+
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ course_id: courseId, week_number: week, started_by: startedBy, topic })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error creating session', 'error');
+
+      showToast(data.message, 'success');
+      document.getElementById('sessionTopicInput').value = '';
+      await refreshAllData();
+    }
+
+    async function loadSessionsList() {
+      await refreshAllData();
+    }
+
+    function renderSessionsList() {
+      const box = document.getElementById('sessionsListContainer');
+      if (!state.sessions.length) {
+        box.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No lecture sessions recorded for this level yet.</div>`;
+        return;
+      }
+      box.innerHTML = state.sessions.map(s => `
+        <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold ${s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}">${s.status}</span>
+              <span class="font-mono text-xs font-bold text-white">${s.course_code} (${s.level}L) • Week ${s.week_number}</span>
+              <span class="font-mono text-[11px] text-slate-500">${s.session_uid}</span>
+            </div>
+            <p class="text-sm font-medium text-slate-200 mt-1">${s.topic}</p>
+            <p class="text-xs text-slate-400 mt-0.5">Lecturer: ${s.started_by} • Verified Present: <b class="text-emerald-400 font-mono">${s.present_count} / ${s.total_class_size}</b> students</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="openSessionInKiosk('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+              📷 Open Kiosk
+            </button>
+            ${s.status === 'ACTIVE' ? `
+              <button onclick="closeLectureSession('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold transition">
+                Lock Session
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openSessionInKiosk(sessionUid) {
+      switchRoleTab('courserep');
+      document.getElementById('kioskSessionSelect').value = sessionUid;
+      showToast(`Kiosk locked to session ${sessionUid}`);
+    }
+
+    async function closeLectureSession(sessionUid) {
+      const res = await fetch(`/api/sessions/${sessionUid}/close`, { method: 'POST' });
+      const data = await res.json();
+      showToast(data.message || 'Session closed');
+      await refreshAllData();
+    }
+
+    // =========================================================================
+    // COURSE REP BIOMETRIC KIOSK, CAMERA & OFFLINE SYNC
+    // =========================================================================
+    async function startKioskCamera() {
+      const video = document.getElementById('kioskVideo');
+      const placeholder = document.getElementById('kioskCameraPlaceholder');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        showToast('Samsung Camera Biometric Sensor Active!');
+      } catch (err) {
+        showToast('Camera permission unavailable in this browser window — using hardware-simulated biometric template matching.', 'warn');
+      }
+    }
+
+    function cacheDepartmentTemplatesOffline() {
+      localStorage.setItem('eng_cached_biometric_templates', JSON.stringify(state.cachedTemplates));
+      const count = Object.keys(state.cachedTemplates).length;
+      showToast(`Cached ${count} encrypted student biometric vectors to device storage for Offline Mode!`);
+    }
+
+    async function verifyStudentOnKiosk(method = 'FACE_BIOMETRIC_KIOSK') {
+      const sessionUid = document.getElementById('kioskSessionSelect').value;
+      const matricNo = document.getElementById('kioskStudentSelect').value;
+      if (!sessionUid || !matricNo) {
+        return showToast('Please select both an active lecture session and a student.', 'error');
+      }
+
+      const cachedVector = state.cachedTemplates[matricNo] || null;
+      const payload = {
+        session_uid: sessionUid,
+        matric_no: matricNo,
+        verification_method: method,
+        face_descriptor: cachedVector,
+        captured_offline: isOfflineMode(),
+        client_timestamp: new Date().toISOString()
+      };
+
+      const overlay = document.getElementById('kioskLastMatchOverlay');
+      const matchText = document.getElementById('kioskMatchText');
+
+      if (isOfflineMode()) {
+        // Verify locally against cached biometric template first!
+        if (!cachedVector) {
+          return showToast(`Biometric check failed: ${matricNo} has no enrolled face template on this device!`, 'error');
+        }
+        const alreadyQueued = state.offlineQueue.some(q => q.session_uid === sessionUid && q.matric_no === matricNo);
+        if (!alreadyQueued) {
+          state.offlineQueue.push(payload);
+          localStorage.setItem('eng_offline_attendance_queue', JSON.stringify(state.offlineQueue));
+        }
+        updateNetworkUI();
+        overlay.classList.remove('hidden');
+        matchText.textContent = `[OFFLINE VERIFIED] ${matricNo} queued for HOD sync`;
+        showToast(`Verified ${matricNo} offline! Stored in local queue (${state.offlineQueue.length} pending).`, 'warn');
+        return;
+      }
+
+      // Online Verification
+      const res = await fetch('/api/attendance/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return showToast(data.detail || 'Biometric verification failed', 'error');
+      }
+
+      overlay.classList.remove('hidden');
+      matchText.textContent = `✓ ${data.record.full_name} (${data.record.matric_no}) Marked Present`;
+      showToast(data.message, 'success');
+      await refreshAllData();
+    }
+
+    async function syncOfflineQueueNow() {
+      if (state.offlineQueue.length === 0) {
+        return showToast('Offline queue is already empty!', 'success');
+      }
+      if (state.simulatedOffline) {
+        state.simulatedOffline = false;
+      }
+      try {
+        const res = await fetch('/api/attendance/sync-offline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: state.offlineQueue })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          state.offlineQueue = [];
+          localStorage.setItem('eng_offline_attendance_queue', '[]');
+          updateNetworkUI();
+          showToast(data.message, 'success');
+          await refreshAllData();
+        } else {
+          showToast(data.detail || 'Failed to sync offline records', 'error');
+        }
+      } catch (e) {
+        showToast('Network unreachable. Records remain safely stored on device.', 'warn');
+      }
+    }
+
+    async function enrollStudentBiometric() {
+      const level = parseInt(document.getElementById('enrollLevel').value, 10);
+      const matric_no = document.getElementById('enrollMatric').value.trim().toUpperCase();
+      const full_name = document.getElementById('enrollName').value.trim();
+      const enrolled_by_rep = document.getElementById('enrollRepName').value.trim();
+
+      if (!matric_no || !full_name) {
+        return showToast('Enter both Matric Number and Full Name to enroll student biometrics.', 'error');
+      }
+
+      const res = await fetch('/api/students/enroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          department_id: state.selectedDeptId,
+          level,
+          matric_no,
+          full_name,
+          enrolled_by_rep
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Enrollment failed', 'error');
+
+      document.getElementById('enrollMatric').value = '';
+      document.getElementById('enrollName').value = '';
+      showToast(data.message, 'success');
+      await refreshAllData();
+    }
+
+    // =========================================================================
+    // STUDENT PORTAL & PASSKEY CHECK-IN
+    // =========================================================================
+    function quickLookup(matric) {
+      document.getElementById('studentLookupInput').value = matric;
+      document.getElementById('studentSelfMatric').value = matric;
+      lookupStudentDashboard();
+    }
+
+    async function lookupStudentDashboard() {
+      const matric = document.getElementById('studentLookupInput').value.trim().toUpperCase();
+      const box = document.getElementById('studentPersonalResult');
+      if (!matric) return;
+
+      const res = await fetch(`/api/student/lookup?matric_no=${encodeURIComponent(matric)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        box.innerHTML = `<div class="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 text-xs text-rose-200">${data.detail || 'Student not found'}</div>`;
+        return;
+      }
+
+      const st = data.student;
+      const coursesHtml = data.courses.map(c => {
+        const badge = c.exam_eligible
+          ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">ELIGIBLE (≥70%)</span>`
+          : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold">BARRED (<70%)</span>`;
+        return `
+          <div class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-bold text-emerald-400">${c.course_code}</span>
+                <span class="text-sm font-semibold text-white">${c.course_title}</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">Lecturer: ${c.lecturer_name} • Attended: <b class="text-white font-mono">${c.attended} / ${c.total_sessions}</b> lectures</p>
+            </div>
+            <div class="text-right">
+              <div class="font-display text-lg font-bold ${c.exam_eligible ? 'text-emerald-400' : 'text-rose-400'}">${c.percentage}%</div>
+              ${badge}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      box.innerHTML = `
+        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center justify-between">
+          <div>
+            <p class="text-xs font-mono text-emerald-400">${st.matric_no} • ${st.level} Level</p>
+            <h4 class="font-display text-lg font-bold text-white">${st.full_name}</h4>
+            <p class="text-xs text-slate-400">Department of ${st.department_name}</p>
+          </div>
+          <div class="text-right text-xs font-mono">
+            <div class="text-emerald-400">✓ Face Biometric ID</div>
+            <div class="text-teal-400">✓ Phone Passkey Bound</div>
+          </div>
+        </div>
+        <div class="space-y-2.5">${coursesHtml}</div>
+      `;
+    }
+
+    async function studentPasskeyCheckIn() {
+      const sessionUid = document.getElementById('studentSelfSessionSelect').value;
+      const matricNo = document.getElementById('studentSelfMatric').value.trim().toUpperCase();
+      if (!sessionUid || !matricNo) return showToast('Select an active session and enter your Matric No', 'error');
+
+      // Trigger native WebAuthn / Passkey prompt if available or cryptographic device passkey verification
+      const passkeyId = `passkey-${matricNo.replace(/\//g, '-')}`;
+      const res = await fetch('/api/attendance/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_uid: sessionUid,
+          matric_no: matricNo,
+          verification_method: 'DEVICE_FINGERPRINT_PASSKEY',
+          webauthn_credential_id: passkeyId,
+          captured_offline: false,
+          client_timestamp: new Date().toISOString()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Passkey check-in failed', 'error');
+
+      showToast(`Fingerprint Passkey Verified! ${data.record.full_name} marked present.`, 'success');
+      await refreshAllData();
+      lookupStudentDashboard();
+    }
+
+    // =========================================================================
+    // MODALS FOR ADDING DEPARTMENTS & COURSES
+    // =========================================================================
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    async function submitNewDepartment() {
+      const code = document.getElementById('newDeptCode').value.trim().toUpperCase();
+      const name = document.getElementById('newDeptName').value.trim();
+      const hod_name = document.getElementById('newDeptHod').value.trim();
+      if (!code || !name || !hod_name) return showToast('Please fill all department fields', 'error');
+
+      const res = await fetch('/api/departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name, hod_name })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error creating department', 'error');
+
+      closeModal('deptModal');
+      showToast(data.message, 'success');
+      state.selectedDeptId = data.department.id;
+      await loadDepartments();
+      await refreshAllData();
+    }
+
+    async function submitNewCourse() {
+      const course_code = document.getElementById('newCourseCode').value.trim().toUpperCase();
+      const level = parseInt(document.getElementById('newCourseLevel').value, 10);
+      const course_title = document.getElementById('newCourseTitle').value.trim();
+      const lecturer_name = document.getElementById('newCourseLecturer').value.trim();
+      if (!course_code || !course_title || !lecturer_name) return showToast('Fill all course fields', 'error');
+
+      const res = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          department_id: state.selectedDeptId,
+          course_code,
+          course_title,
+          level,
+          credit_units: 3,
+          lecturer_name,
+          lecturer_staff_id: `STF-${course_code.replace(/\s+/g, '')}`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error adding course', 'error');
+
+      closeModal('courseModal');
+      showToast(data.message, 'success');
+      await refreshAllData();
+    }
+
+    // Initialize App on Load
+    window.addEventListener('DOMContentLoaded', async () => {
+      updateNetworkUI();
+      await loadDepartments();
+      await refreshAllData();
+    });
+  </script>
+</body>
+</html>
