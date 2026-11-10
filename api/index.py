@@ -11,8 +11,10 @@ import secrets
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import (
     create_engine, Column, Integer, String, Float, Boolean,
@@ -1003,4 +1005,25 @@ def student_personal_status(matric_no: str = Query(...), db: Session = Depends(g
 
 
 app.include_router(router)
+
+PUBLIC_DIR = Path(__file__).resolve().parent.parent / "public"
+
+
+@app.get("/", response_class=HTMLResponse)
+def serve_spa_root():
+    index_file = PUBLIC_DIR / "index.html"
+    if index_file.exists():
+        return index_file.read_text(encoding="utf-8")
+    return "<h1>EngAttend API Active</h1>"
+
+
+@app.get("/manifest.json")
+def serve_manifest():
+    return FileResponse(PUBLIC_DIR / "manifest.json", media_type="application/json")
+
+
+@app.get("/sw.js")
+def serve_sw():
+    return FileResponse(PUBLIC_DIR / "sw.js", media_type="application/javascript")
+
 
