@@ -1,18 +1,18 @@
 """
 Engineering Faculty Biometric Attendance & 70% Exam Eligibility System
 Production Backend API (Python FastAPI + PostgreSQL / SQLite fallback)
-Supports 300L, 400L, and 500L Departmental Core Courses across Engineering.
+Supports 300L, 400L, and 500L Departmental Core Courses across all 13 Engineering Departments.
 """
 import os
 import json
 import math
 import hashlib
 import secrets
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
-from pathlib import Path
-from fastapi import FastAPI, HTTPException, Depends, Query, Body
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
@@ -20,13 +20,13 @@ from sqlalchemy import (
     create_engine, Column, Integer, String, Float, Boolean,
     DateTime, ForeignKey, Text, UniqueConstraint
 )
-from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Database Setup: Uses Supabase PostgreSQL in production if DATABASE_URL is set,
-# with automatic fallback to local/serverless SQLite if direct IPv6 host is unreachable.
+# Database Setup: Uses Supabase PostgreSQL in production if DATABASE_URL is reachable,
+# with automatic resilient fallback to serverless SQLite (/tmp/eng_attendance_v2.db)
 RAW_DB_URL = os.getenv("DATABASE_URL", "").strip()
 if RAW_DB_URL.startswith("postgres://"):
     RAW_DB_URL = RAW_DB_URL.replace("postgres://", "postgresql://", 1)
@@ -40,7 +40,7 @@ if RAW_DB_URL:
             RAW_DB_URL,
             pool_pre_ping=True,
             pool_recycle=300,
-            connect_args={"connect_timeout": 5},
+            connect_args={"connect_timeout": 4},
         )
         with test_engine.connect() as conn:
             pass
@@ -51,7 +51,7 @@ if RAW_DB_URL:
         print(f"Supabase direct connection notice ({db_err}); using resilient fallback.")
 
 if engine is None:
-    db_path = "/tmp/eng_attendance.db" if os.name != "nt" else "./eng_attendance.db"
+    db_path = "/tmp/eng_attendance_v2.db" if os.name != "nt" else "./eng_attendance_v2.db"
     DATABASE_URL = f"sqlite:///{db_path}"
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
@@ -66,8 +66,8 @@ Base = declarative_base()
 class Department(Base):
     __tablename__ = "departments"
     id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(20), unique=True, index=True, nullable=False)  # e.g., PET, MEE, EEE, CVE, CPE, CHE
-    name = Column(String(120), unique=True, nullable=False)             # e.g., Petroleum Engineering
+    code = Column(String(20), unique=True, index=True, nullable=False)  # PEE, CHE, CVE, CPE, EEE, MEE, PRE, STE, AGE, MME, MCE, INE, MRE
+    name = Column(String(120), unique=True, nullable=False)
     hod_name = Column(String(120), nullable=False)
     hod_email = Column(String(120), nullable=True)
     hod_pin_hash = Column(String(128), nullable=False)
@@ -79,7 +79,7 @@ class Course(Base):
     __tablename__ = "courses"
     id = Column(Integer, primary_key=True, index=True)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=False, index=True)
-    course_code = Column(String(20), index=True, nullable=False)        # e.g., PET 401
+    course_code = Column(String(20), index=True, nullable=False)        # e.g., PEE 401
     course_title = Column(String(200), nullable=False)
     level = Column(Integer, nullable=False, index=True)                 # 300, 400, or 500
     credit_units = Column(Integer, default=3)
@@ -95,7 +95,7 @@ class CourseRep(Base):
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=False, index=True)
     level = Column(Integer, nullable=False, index=True)                 # 300, 400, or 500
     full_name = Column(String(120), nullable=False)
-    matric_no = Column(String(50), unique=True, nullable=False)
+    matric_no = Column(String(64), unique=True, nullable=False)
     pin_hash = Column(String(128), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -105,13 +105,10 @@ class Student(Base):
     id = Column(Integer, primary_key=True, index=True)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=False, index=True)
     level = Column(Integer, nullable=False, index=True)                 # 300, 400, or 500
-    matric_no = Column(String(50), unique=True, index=True, nullable=False)
+    matric_no = Column(String(64), unique=True, index=True, nullable=False)  # Flexible: ENG/123/4567, UB6474386, B1222329, PG2307676
     full_name = Column(String(120), nullable=False)
-    email = Column(String(120), nullable=True)
-    # Biometric Templates (No External USB Required):
-    # 1. Face Descriptor Vector (128-float JSON array extracted on-device for offline/online matching)
+    email = Column(String(150), nullable=False)                         # Institutional email for HOD warning alerts
     face_descriptor_json = Column(Text, nullable=True)
-    # 2. Device WebAuthn / Passkey Credential ID (bound to student's smartphone fingerprint/FaceID)
     webauthn_credential_id = Column(String(255), nullable=True)
     biometric_enrolled_at = Column(DateTime, nullable=True)
     enrolled_by_rep = Column(String(120), nullable=True)
@@ -127,7 +124,7 @@ class LectureSession(Base):
     level = Column(Integer, nullable=False, index=True)
     topic = Column(String(200), nullable=False)
     week_number = Column(Integer, default=1)
-    started_by = Column(String(120), nullable=False)                    # Lecturer or Authorized Course Rep
+    started_by = Column(String(120), nullable=False)
     status = Column(String(20), default="ACTIVE")                       # ACTIVE, CLOSED
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
@@ -142,9 +139,9 @@ class AttendanceRecord(Base):
     session_id = Column(Integer, ForeignKey("lecture_sessions.id"), nullable=False, index=True)
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False, index=True)
-    matric_no = Column(String(50), nullable=False, index=True)
+    matric_no = Column(String(64), nullable=False, index=True)
     verification_method = Column(String(50), nullable=False)            # FACE_BIOMETRIC_KIOSK, DEVICE_FINGERPRINT_PASSKEY
-    confidence_score = Column(Float, default=0.98)                      # Cosine similarity / match confidence
+    confidence_score = Column(Float, default=0.98)
     captured_offline = Column(Boolean, default=False)
     client_timestamp = Column(String(64), nullable=True)
     synced_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -155,8 +152,25 @@ class AttendanceRecord(Base):
 
 
 # =====================================================================
-# HELPERS & SEED DATA
+# HELPERS & SEED DATA FOR ALL 13 ENGINEERING DEPARTMENTS
 # =====================================================================
+
+ALL_13_ENGINEERING_DEPARTMENTS = [
+    ("PEE", "Petroleum Engineering", "Prof. E. O. Adewale"),
+    ("CHE", "Chemical Engineering", "Prof. S. U. Eze"),
+    ("CVE", "Civil Engineering", "Prof. T. K. Danjuma"),
+    ("CPE", "Computer Engineering", "Dr. A. M. Nsofor"),
+    ("EEE", "Electrical/Electronic Engineering", "Prof. I. A. Bello"),
+    ("MEE", "Mechanical Engineering", "Prof. C. N. Okafor"),
+    ("PRE", "Production Engineering", "Prof. O. A. Ibhadode"),
+    ("STE", "Structural Engineering", "Prof. K. O. Olusola"),
+    ("AGE", "Agricultural Engineering", "Prof. A. O. Olatunji"),
+    ("MME", "Metallurgical and Materials Engineering", "Prof. M. N. Nebo"),
+    ("MCE", "Mechatronics Engineering", "Prof. S. A. Lawal"),
+    ("INE", "Industrial Engineering", "Prof. B. O. Akinnuli"),
+    ("MRE", "Marine Engineering", "Prof. D. T. Tamuno"),
+]
+
 
 def hash_pin(pin: str) -> str:
     return hashlib.sha256(f"eng_salt_2026:{pin.strip()}".encode()).hexdigest()
@@ -174,7 +188,6 @@ def compute_cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
 
 
 def generate_deterministic_signature(seed_text: str, dims: int = 32) -> List[float]:
-    """Generates a normalized biometric template vector for demo/seeded students."""
     vals = []
     for i in range(dims):
         h = hashlib.sha256(f"{seed_text}:{i}".encode()).digest()
@@ -188,53 +201,71 @@ def init_and_seed_db():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        if db.query(Department).count() > 0:
+        # Migrate legacy PET code to PEE if present, and ensure all 13 departments exist
+        legacy_pet = db.query(Department).filter(Department.code == "PET").first()
+        if legacy_pet:
+            legacy_pet.code = "PEE"
+            legacy_pet.name = "Petroleum Engineering"
+            db.commit()
+
+        dept_map = {}
+        for code, name, hod in ALL_13_ENGINEERING_DEPARTMENTS:
+            existing = db.query(Department).filter(Department.code == code).first()
+            if not existing:
+                existing = Department(
+                    code=code,
+                    name=name,
+                    hod_name=hod,
+                    hod_email=f"hod.{code.lower()}@eng.edu.ng",
+                    hod_pin_hash=hash_pin("1234"),
+                    min_attendance_pct=70.0,
+                )
+                db.add(existing)
+                db.flush()
+            dept_map[code] = existing
+
+        db.commit()
+
+        if db.query(Course).count() > 0:
             return
 
-        # Seed Core Engineering Departments
-        depts_data = [
-            ("PET", "Petroleum Engineering", "Prof. E. O. Adewale"),
-            ("MEE", "Mechanical Engineering", "Prof. C. N. Okafor"),
-            ("EEE", "Electrical & Electronics Engineering", "Prof. I. A. Bello"),
-            ("CVE", "Civil & Environmental Engineering", "Prof. T. K. Danjuma"),
-            ("CPE", "Computer & Systems Engineering", "Dr. A. M. Nsofor"),
-            ("CHE", "Chemical & Polymer Engineering", "Prof. S. U. Eze"),
-        ]
-        dept_map = {}
-        for code, name, hod in depts_data:
-            d = Department(
-                code=code,
-                name=name,
-                hod_name=hod,
-                hod_email=f"hod.{code.lower()}@engineering.edu.ng",
-                hod_pin_hash=hash_pin("1234"),
-                min_attendance_pct=70.0,
-            )
-            db.add(d)
-            db.flush()
-            dept_map[code] = d
-
-        # Seed Departmental Core Courses for 300L, 400L, and 500L
+        # Seed Departmental Core Courses for 300L, 400L, and 500L across key departments
         courses_seed = [
-            # Petroleum Engineering (PET)
-            ("PET", "PET 301", "Reservoir Engineering I", 300, 3, "Dr. K. Ibe", "STF-PET-01"),
-            ("PET", "PET 303", "Drilling Fluids Technology", 300, 3, "Engr. Dr. F. Briggs", "STF-PET-02"),
-            ("PET", "PET 401", "Applied Reservoir Engineering II", 400, 4, "Dr. M. O. Nwosu", "STF-PET-03"),
-            ("PET", "PET 403", "Well Logging & Formation Evaluation", 400, 3, "Prof. E. O. Adewale", "STF-PET-04"),
-            ("PET", "PET 501", "Petroleum Production Engineering", 500, 4, "Prof. B. Tamuno", "STF-PET-05"),
-            ("PET", "PET 505", "Natural Gas Engineering & Processing", 500, 3, "Dr. R. Lawson", "STF-PET-06"),
+            # Petroleum Engineering (PEE)
+            ("PEE", "PEE 301", "Reservoir Engineering I", 300, 3, "Dr. K. Ibe", "STF-PEE-01"),
+            ("PEE", "PEE 303", "Drilling Fluids Technology", 300, 3, "Engr. Dr. F. Briggs", "STF-PEE-02"),
+            ("PEE", "PEE 401", "Applied Reservoir Engineering II", 400, 4, "Dr. M. O. Nwosu", "STF-PEE-03"),
+            ("PEE", "PEE 403", "Well Logging & Formation Evaluation", 400, 3, "Prof. E. O. Adewale", "STF-PEE-04"),
+            ("PEE", "PEE 501", "Petroleum Production Engineering", 500, 4, "Prof. B. Tamuno", "STF-PEE-05"),
+            ("PEE", "PEE 505", "Natural Gas Engineering & Processing", 500, 3, "Dr. R. Lawson", "STF-PEE-06"),
+            # Chemical Engineering (CHE)
+            ("CHE", "CHE 301", "Chemical Engineering Thermodynamics", 300, 3, "Dr. U. Okafor", "STF-CHE-01"),
+            ("CHE", "CHE 401", "Chemical Reaction Kinetics & Reactor Design", 400, 4, "Prof. S. U. Eze", "STF-CHE-02"),
+            ("CHE", "CHE 501", "Process Dynamics, Control & Plant Design", 500, 4, "Dr. L. Nwachukwu", "STF-CHE-03"),
+            # Civil Engineering (CVE)
+            ("CVE", "CVE 301", "Structural Mechanics & Analysis I", 300, 3, "Dr. P. Audu", "STF-CVE-01"),
+            ("CVE", "CVE 401", "Design of Reinforced Concrete Structures", 400, 4, "Prof. T. K. Danjuma", "STF-CVE-02"),
+            ("CVE", "CVE 501", "Geotechnical & Highway Foundation Engineering", 500, 4, "Dr. G. Osho", "STF-CVE-03"),
+            # Computer Engineering (CPE)
+            ("CPE", "CPE 301", "Microprocessors & Embedded Systems", 300, 3, "Engr. T. Obi", "STF-CPE-01"),
+            ("CPE", "CPE 401", "Computer Architecture & Digital System Design", 400, 4, "Dr. A. M. Nsofor", "STF-CPE-02"),
+            ("CPE", "CPE 501", "Distributed Computing & Cyber-Physical Systems", 500, 4, "Prof. V. Okeke", "STF-CPE-03"),
+            # Electrical/Electronic Engineering (EEE)
+            ("EEE", "EEE 301", "Electromagnetic Fields & Waves", 300, 3, "Dr. J. Kalu", "STF-EEE-01"),
+            ("EEE", "EEE 401", "Control Engineering & Instrumentation", 400, 4, "Prof. I. A. Bello", "STF-EEE-02"),
+            ("EEE", "EEE 501", "Power Systems Analysis & High Voltage", 500, 4, "Dr. O. Fasanya", "STF-EEE-03"),
             # Mechanical Engineering (MEE)
             ("MEE", "MEE 301", "Fluid Mechanics II", 300, 3, "Dr. A. Balogun", "STF-MEE-01"),
             ("MEE", "MEE 401", "Applied Thermodynamics & Heat Transfer", 400, 4, "Prof. C. N. Okafor", "STF-MEE-02"),
             ("MEE", "MEE 501", "Tribology & Power Plant Engineering", 500, 4, "Dr. H. Usman", "STF-MEE-03"),
-            # Electrical & Electronics (EEE)
-            ("EEE", "EEE 301", "Electromagnetic Fields & Waves", 300, 3, "Dr. J. Kalu", "STF-EEE-01"),
-            ("EEE", "EEE 401", "Control Engineering & Instrumentation", 400, 4, "Prof. I. A. Bello", "STF-EEE-02"),
-            ("EEE", "EEE 501", "Power Systems Analysis & High Voltage", 500, 4, "Dr. O. Fasanya", "STF-EEE-03"),
-            # Computer Engineering (CPE)
-            ("CPE", "CPE 301", "Microprocessors & Embedded Systems", 300, 3, "Engr. T. Obi", "STF-CPE-01"),
-            ("CPE", "CPE 401", "Computer Architecture & Digital Design", 400, 4, "Dr. A. M. Nsofor", "STF-CPE-02"),
-            ("CPE", "CPE 501", "Distributed Computing & Cyber-Physical Systems", 500, 4, "Prof. V. Okeke", "STF-CPE-03"),
+            # Production, Structural, Agricultural, Metallurgical, Mechatronics, Industrial, Marine
+            ("PRE", "PRE 401", "Manufacturing Technology & Machine Tools", 400, 3, "Prof. O. A. Ibhadode", "STF-PRE-01"),
+            ("STE", "STE 401", "Advanced Matrix & Finite Element Structural Analysis", 400, 4, "Prof. K. O. Olusola", "STF-STE-01"),
+            ("AGE", "AGE 401", "Irrigation, Drainage & Soil Water Engineering", 400, 3, "Prof. A. O. Olatunji", "STF-AGE-01"),
+            ("MME", "MME 401", "Physical Metallurgy & Phase Transformations", 400, 3, "Prof. M. N. Nebo", "STF-MME-01"),
+            ("MCE", "MCE 401", "Robotics, Actuators & Mechatronic System Design", 400, 4, "Prof. S. A. Lawal", "STF-MCE-01"),
+            ("INE", "INE 401", "Operations Research & Ergonomics", 400, 3, "Prof. B. O. Akinnuli", "STF-INE-01"),
+            ("MRE", "MRE 401", "Marine Propulsion Systems & Naval Architecture", 400, 4, "Prof. D. T. Tamuno", "STF-MRE-01"),
         ]
 
         course_objs = {}
@@ -253,49 +284,46 @@ def init_and_seed_db():
             db.flush()
             course_objs[c_code] = c
 
-        # Seed Level Course Reps (300L, 400L, 500L)
+        # Seed Level Course Reps (300L, 400L, 500L) using realistic varied Matric No formats
         reps_seed = [
-            ("PET", 300, "Chidi Okafor (300L Rep)", "ENG/PET/23/001"),
-            ("PET", 400, "Emmanuel Nsofor (400L Course Rep)", "ENG/PET/22/001"),
-            ("PET", 500, "Toluwalase Adeyemi (500L Rep)", "ENG/PET/21/001"),
-            ("MEE", 400, "Ibrahim Musa (400L MEE Rep)", "ENG/MEE/22/001"),
-            ("EEE", 400, "Kemi Adebayo (400L EEE Rep)", "ENG/EEE/22/001"),
-            ("CPE", 400, "Daniel Chukwu (400L CPE Rep)", "ENG/CPE/22/001"),
+            ("PEE", 300, "Chidi Okafor (300L Rep)", "ENG/230/1001"),
+            ("PEE", 400, "Emmanuel Nsofor (400L Course Rep)", "ENG/220/4001"),
+            ("PEE", 500, "Toluwalase Adeyemi (500L Rep)", "UB6474301"),
         ]
         for d_code, lvl, name, mat in reps_seed:
-            rep = CourseRep(
+            db.add(CourseRep(
                 department_id=dept_map[d_code].id,
                 level=lvl,
                 full_name=name,
                 matric_no=mat,
                 pin_hash=hash_pin("1234"),
-            )
-            db.add(rep)
+            ))
 
-        # Seed Realistic Students in 300L, 400L, 500L so HOD 70% Matrix works out of the box
-        pet_400_students = [
-            ("ENG/PET/22/001", "Emmanuel Nsofor", True),
-            ("ENG/PET/22/002", "Aisha Bello", True),
-            ("ENG/PET/22/003", "Chinedu Eze", True),
-            ("ENG/PET/22/004", "Oluwaseun Bakare", True),
-            ("ENG/PET/22/005", "Ngozi Okonkwo", True),
-            ("ENG/PET/22/006", "Babajide Sanwo", True),
-            ("ENG/PET/22/007", "Fatima Danjuma", True),
-            ("ENG/PET/22/008", "Kelechi Iheanacho", True),
-            ("ENG/PET/22/009", "Damilola Ojo", True),
-            ("ENG/PET/22/010", "Uchechukwu Nnaji", True),
-            ("ENG/PET/22/011", "Sadiq Abubakar", True),
-            ("ENG/PET/22/012", "Blessing Tamuno", False),
+        # Seed Realistic Students in PEE 400L showcasing flexible Matric Formats + Institutional Emails:
+        # ENG/123/4567, UB6474386, B1222329, PG2307676
+        pee_400_students = [
+            ("ENG/220/4001", "Emmanuel Nsofor", "emmanuel.nsofor@eng.uniben.edu", True),
+            ("ENG/123/4567", "Aisha Bello", "aisha.bello@eng.uniben.edu", True),
+            ("UB6474386", "Chinedu Eze", "chinedu.eze@eng.uniben.edu", True),
+            ("B1222329", "Oluwaseun Bakare", "oluwaseun.bakare@eng.uniben.edu", True),
+            ("PG2307676", "Ngozi Okonkwo", "ngozi.okonkwo@eng.uniben.edu", True),
+            ("ENG/220/4006", "Babajide Sanwo", "babajide.sanwo@eng.uniben.edu", True),
+            ("UB6474390", "Fatima Danjuma", "fatima.danjuma@eng.uniben.edu", True),
+            ("B1222388", "Kelechi Iheanacho", "kelechi.iheanacho@eng.uniben.edu", True),
+            ("ENG/220/4009", "Damilola Ojo", "damilola.ojo@eng.uniben.edu", True),
+            ("UB6474412", "Uchechukwu Nnaji", "uchechukwu.nnaji@eng.uniben.edu", True),
+            ("B1222405", "Sadiq Abubakar", "sadiq.abubakar@eng.uniben.edu", True),
+            ("PG2307701", "Blessing Tamuno", "blessing.tamuno@eng.uniben.edu", False),
         ]
         student_objs = []
-        for mat, name, enrolled in pet_400_students:
+        for mat, name, email, enrolled in pee_400_students:
             sig = generate_deterministic_signature(mat) if enrolled else None
             st = Student(
-                department_id=dept_map["PET"].id,
+                department_id=dept_map["PEE"].id,
                 level=400,
                 matric_no=mat,
                 full_name=name,
-                email=f"{mat.lower().replace('/', '.')}@student.eng.edu.ng",
+                email=email,
                 face_descriptor_json=json.dumps(sig) if sig else None,
                 webauthn_credential_id=f"passkey-{mat.replace('/', '-')}" if enrolled else None,
                 biometric_enrolled_at=datetime.now(timezone.utc) if enrolled else None,
@@ -305,29 +333,30 @@ def init_and_seed_db():
             db.flush()
             student_objs.append(st)
 
-        # Also add 300L and 500L PET students
-        for mat, name, lvl in [
-            ("ENG/PET/23/001", "Chidi Okafor", 300),
-            ("ENG/PET/23/002", "Zainab Lawal", 300),
-            ("ENG/PET/23/003", "David Mark", 300),
-            ("ENG/PET/21/001", "Toluwalase Adeyemi", 500),
-            ("ENG/PET/21/002", "Emeka Ojukwu", 500),
-            ("ENG/PET/21/003", "Grace Amadi", 500),
+        # Also add 300L and 500L PEE students with institutional emails
+        for mat, name, email, lvl in [
+            ("ENG/230/1001", "Chidi Okafor", "chidi.okafor@eng.uniben.edu", 300),
+            ("UB6501122", "Zainab Lawal", "zainab.lawal@eng.uniben.edu", 300),
+            ("B1230455", "David Mark", "david.mark@eng.uniben.edu", 300),
+            ("UB6474301", "Toluwalase Adeyemi", "toluwalase.adeyemi@eng.uniben.edu", 500),
+            ("ENG/210/5002", "Emeka Ojukwu", "emeka.ojukwu@eng.uniben.edu", 500),
+            ("PG2108844", "Grace Amadi", "grace.amadi@eng.uniben.edu", 500),
         ]:
             sig = generate_deterministic_signature(mat)
             db.add(Student(
-                department_id=dept_map["PET"].id,
+                department_id=dept_map["PEE"].id,
                 level=lvl,
                 matric_no=mat,
                 full_name=name,
+                email=email,
                 face_descriptor_json=json.dumps(sig),
                 webauthn_credential_id=f"passkey-{mat.replace('/', '-')}",
                 biometric_enrolled_at=datetime.now(timezone.utc),
                 enrolled_by_rep="Course Rep",
             ))
 
-        # Seed 5 Historical Lecture Sessions for PET 401 so HOD sees realistic >=70% vs <70% barred students
-        pet401 = course_objs["PET 401"]
+        # Seed 5 Historical Lecture Sessions for PEE 401 so HOD sees >=70% vs <70% barred students
+        pee401 = course_objs["PEE 401"]
         topics = [
             (1, "Week 1: Fundamental Reservoir Rock Properties & Porosity"),
             (2, "Week 2: Fluid Saturation & Capillary Pressure Curves"),
@@ -335,17 +364,13 @@ def init_and_seed_db():
             (4, "Week 4: Material Balance Equation (MBE) for Oil Reservoirs"),
             (5, "Week 5: Drive Mechanisms & Recovery Factor Estimation"),
         ]
-        # Attendance pattern out of 5 classes:
-        # First 5 students: 4 or 5 classes (80%-100% -> ELIGIBLE >=70%)
-        # Next 2 students: 3 classes (60% -> AT RISK / BARRED <70%)
-        # Remaining students: 1 or 2 classes (20%-40% -> BARRED <70% - Truant students!)
         attendance_counts = [5, 5, 4, 4, 4, 3, 3, 2, 2, 1, 1, 0]
 
         for wk, topic in topics:
             sess = LectureSession(
-                session_uid=f"SESS-PET401-W{wk}",
-                course_id=pet401.id,
-                department_id=dept_map["PET"].id,
+                session_uid=f"SESS-PEE401-W{wk}",
+                course_id=pee401.id,
+                department_id=dept_map["PEE"].id,
                 level=400,
                 topic=topic,
                 week_number=wk,
@@ -361,7 +386,7 @@ def init_and_seed_db():
                 if wk <= attendance_counts[idx]:
                     db.add(AttendanceRecord(
                         session_id=sess.id,
-                        course_id=pet401.id,
+                        course_id=pee401.id,
                         student_id=st.id,
                         matric_no=st.matric_no,
                         verification_method="FACE_BIOMETRIC_KIOSK" if idx % 2 == 0 else "DEVICE_FINGERPRINT_PASSKEY",
@@ -395,7 +420,7 @@ def get_db():
 app = FastAPI(
     title="EngAttend Biometric API (300L-500L)",
     description="Zero-Impersonation Biometric Attendance & HOD 70% Exam Eligibility System for Engineering",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -408,30 +433,39 @@ app.add_middleware(
 
 
 class DepartmentCreate(BaseModel):
-    code: str = Field(..., example="AGE")
-    name: str = Field(..., example="Agricultural & Bio-Resources Engineering")
-    hod_name: str = Field(..., example="Prof. A. O. Olatunji")
+    code: str = Field(..., example="PEE")
+    name: str = Field(..., example="Petroleum Engineering")
+    hod_name: str = Field(..., example="Prof. E. O. Adewale")
     hod_email: Optional[str] = None
     hod_pin: str = Field(default="1234")
 
 
 class CourseCreate(BaseModel):
     department_id: int
-    course_code: str = Field(..., example="PET 405")
+    course_code: str = Field(..., example="PEE 405")
     course_title: str = Field(..., example="Drilling Engineering II")
     level: int = Field(..., description="Must be 300, 400, or 500")
     credit_units: int = Field(default=3)
     lecturer_name: str
-    lecturer_staff_id: str
+    lecturer_staff_id: Optional[str] = None
     lecturer_pin: str = Field(default="1234")
+
+
+class CourseUpdate(BaseModel):
+    """Allows the HOD to edit the exact details that were inputted when adding the course."""
+    course_code: str
+    course_title: str
+    level: int
+    lecturer_name: str
+    credit_units: Optional[int] = 3
 
 
 class StudentEnrollRequest(BaseModel):
     department_id: int
     level: int = Field(..., description="300, 400, or 500")
-    matric_no: str
+    matric_no: str = Field(..., description="Flexible format: ENG/123/4567, UB6474386, B1222329, PG2307676, etc.")
     full_name: str
-    email: Optional[str] = None
+    email: str = Field(..., description="Institutional email required for HOD attendance warnings")
     face_descriptor: Optional[List[float]] = None
     webauthn_credential_id: Optional[str] = None
     enrolled_by_rep: str = "Course Rep"
@@ -450,7 +484,7 @@ class SessionCreateRequest(BaseModel):
 class BiometricCheckInRequest(BaseModel):
     session_uid: str
     matric_no: str
-    verification_method: str = "FACE_BIOMETRIC_KIOSK"  # or DEVICE_FINGERPRINT_PASSKEY
+    verification_method: str = "FACE_BIOMETRIC_KIOSK"
     face_descriptor: Optional[List[float]] = None
     webauthn_credential_id: Optional[str] = None
     captured_offline: bool = False
@@ -464,8 +498,6 @@ class OfflineBulkSyncRequest(BaseModel):
 # =====================================================================
 # API ENDPOINTS
 # =====================================================================
-
-from fastapi import APIRouter
 
 router = APIRouter()
 
@@ -486,7 +518,7 @@ def health_check(db: Session = Depends(get_db)):
 @router.get("/departments")
 @router.get("/api/departments")
 def list_departments(db: Session = Depends(get_db)):
-    depts = db.query(Department).order_by(Department.code).all()
+    depts = db.query(Department).order_by(Department.id).all()
     result = []
     for d in depts:
         courses_count = db.query(Course).filter(Course.department_id == d.id).count()
@@ -522,7 +554,7 @@ def register_department(payload: DepartmentCreate, db: Session = Depends(get_db)
     db.add(dept)
     db.commit()
     db.refresh(dept)
-    return {"message": f"Department of {dept.name} registered successfully.", "department": {
+    return {"message": f"Department of {dept.name} ({dept.code}) registered successfully.", "department": {
         "id": dept.id, "code": dept.code, "name": dept.name, "hod_name": dept.hod_name
     }}
 
@@ -569,20 +601,58 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
             status_code=400,
             detail="Only 300L, 400L, and 500L departmental core courses are supported."
         )
+    code_clean = payload.course_code.strip().upper()
+    staff_id = (payload.lecturer_staff_id or f"STF-{code_clean.replace(' ', '')}").strip().upper()
     c = Course(
         department_id=payload.department_id,
-        course_code=payload.course_code.strip().upper(),
+        course_code=code_clean,
         course_title=payload.course_title.strip(),
         level=payload.level,
         credit_units=payload.credit_units,
         lecturer_name=payload.lecturer_name.strip(),
-        lecturer_staff_id=payload.lecturer_staff_id.strip().upper(),
+        lecturer_staff_id=staff_id,
         lecturer_pin_hash=hash_pin(payload.lecturer_pin),
     )
     db.add(c)
     db.commit()
     db.refresh(c)
-    return {"message": f"Course {c.course_code} added.", "id": c.id}
+    return {"message": f"Course {c.course_code} added successfully.", "id": c.id}
+
+
+@router.put("/courses/{course_id}")
+@router.put("/api/courses/{course_id}")
+def update_course_details(course_id: int, payload: CourseUpdate, db: Session = Depends(get_db)):
+    """Allows the HOD to edit the exact details inputted when adding a course (Code, Level, Title, Lecturer)."""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    if payload.level not in (300, 400, 500):
+        raise HTTPException(status_code=400, detail="Course level must be 300, 400, or 500.")
+
+    course.course_code = payload.course_code.strip().upper()
+    course.course_title = payload.course_title.strip()
+    course.level = payload.level
+    course.lecturer_name = payload.lecturer_name.strip()
+    if payload.credit_units is not None:
+        course.credit_units = payload.credit_units
+
+    # Keep any existing lecture sessions for this course aligned with the updated level
+    sessions = db.query(LectureSession).filter(LectureSession.course_id == course.id).all()
+    for s in sessions:
+        s.level = course.level
+
+    db.commit()
+    db.refresh(course)
+    return {
+        "message": f"Course {course.course_code} updated successfully.",
+        "course": {
+            "id": course.id,
+            "course_code": course.course_code,
+            "course_title": course.course_title,
+            "level": course.level,
+            "lecturer_name": course.lecturer_name,
+        }
+    }
 
 
 @router.get("/students")
@@ -625,20 +695,30 @@ def list_students(
 def enroll_student_biometrics(payload: StudentEnrollRequest, db: Session = Depends(get_db)):
     if payload.level not in (300, 400, 500):
         raise HTTPException(status_code=400, detail="Student level must be 300, 400, or 500.")
+
+    # Flexible Matric No normalization: trim whitespace and uppercase (supports ENG/123/4567, UB6474386, B1222329, PG2307676, etc.)
     matric = payload.matric_no.strip().upper()
+    if len(matric) < 3:
+        raise HTTPException(status_code=400, detail="Please enter a valid Matriculation Number.")
+
+    email_clean = payload.email.strip().lower()
+    if not email_clean or "@" not in email_clean:
+        raise HTTPException(
+            status_code=400,
+            detail="A valid Institutional Email is required so the HOD can send attendance warnings."
+        )
+
     student = db.query(Student).filter(Student.matric_no == matric).first()
 
     face_vec = payload.face_descriptor
     if not face_vec:
-        # Generate deterministic biometric vector if enrolled via camera snapshot fallback
         face_vec = generate_deterministic_signature(matric)
 
     if student:
         student.full_name = payload.full_name.strip()
         student.level = payload.level
         student.department_id = payload.department_id
-        if payload.email:
-            student.email = payload.email
+        student.email = email_clean
         student.face_descriptor_json = json.dumps(face_vec)
         if payload.webauthn_credential_id:
             student.webauthn_credential_id = payload.webauthn_credential_id
@@ -650,7 +730,7 @@ def enroll_student_biometrics(payload: StudentEnrollRequest, db: Session = Depen
             level=payload.level,
             matric_no=matric,
             full_name=payload.full_name.strip(),
-            email=payload.email,
+            email=email_clean,
             face_descriptor_json=json.dumps(face_vec),
             webauthn_credential_id=payload.webauthn_credential_id or f"passkey-{matric.replace('/', '-')}",
             biometric_enrolled_at=datetime.now(timezone.utc),
@@ -661,11 +741,12 @@ def enroll_student_biometrics(payload: StudentEnrollRequest, db: Session = Depen
     db.commit()
     db.refresh(student)
     return {
-        "message": f"Biometrics enrolled for {student.full_name} ({student.matric_no})",
+        "message": f"Biometrics & Institutional Email enrolled for {student.full_name} ({student.matric_no})",
         "student": {
             "id": student.id,
             "matric_no": student.matric_no,
             "full_name": student.full_name,
+            "email": student.email,
             "level": student.level,
             "has_face_biometric": True,
             "face_descriptor": face_vec,
@@ -791,7 +872,6 @@ def _process_single_checkin(item: BiometricCheckInRequest, db: Session) -> Dict[
             detail=f"Student {matric} has not enrolled their biometrics with the Level Course Rep yet."
         )
 
-    # Verify Biometric Match (Anti-Impersonation Check)
     confidence = 0.98
     if item.verification_method == "FACE_BIOMETRIC_KIOSK" and item.face_descriptor and student.face_descriptor_json:
         stored_vec = json.loads(student.face_descriptor_json)
@@ -932,6 +1012,7 @@ def hod_exam_eligibility_report(
                 "student_id": st.id,
                 "matric_no": st.matric_no,
                 "full_name": st.full_name,
+                "email": st.email,
                 "biometric_enrolled": bool(st.face_descriptor_json or st.webauthn_credential_id),
                 "attended_classes": attended,
                 "total_classes": total_sessions,
@@ -946,6 +1027,7 @@ def hod_exam_eligibility_report(
             "course_code": c.course_code,
             "course_title": c.course_title,
             "level": c.level,
+            "credit_units": c.credit_units,
             "lecturer_name": c.lecturer_name,
             "total_sessions_held": total_sessions,
             "total_students": len(students),
@@ -1009,6 +1091,7 @@ def student_personal_status(matric_no: str = Query(...), db: Session = Depends(g
             "id": st.id,
             "matric_no": st.matric_no,
             "full_name": st.full_name,
+            "email": st.email,
             "level": st.level,
             "department_name": dept.name if dept else "Engineering",
             "department_code": dept.code if dept else "ENG",
@@ -1040,5 +1123,3 @@ def serve_manifest():
 @app.get("/sw.js")
 def serve_sw():
     return FileResponse(PUBLIC_DIR / "sw.js", media_type="application/javascript")
-
-
