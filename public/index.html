@@ -190,8 +190,8 @@
             <option value="ELIGIBLE">Show Only ELIGIBLE (≥70%)</option>
           </select>
         </div>
-        <div class="text-xs text-slate-400">
-          💡 Click <b>"✏️ Edit Course Details"</b> on any course header below to update its Code, Level, Title, or Lecturer.
+        <div class="text-xs font-mono text-emerald-400" id="dbEngineBadge">
+          Connecting to Database...
         </div>
       </div>
 
@@ -691,8 +691,16 @@
     // API DATA LOADING
     // =========================================================================
     async function loadDepartments() {
-      const res = await fetch('/api/departments');
+      const [res, healthRes] = await Promise.all([
+        fetch('/api/departments'),
+        fetch('/api/health')
+      ]);
       state.departments = await res.json();
+      const health = await healthRes.json();
+      const dbBadge = document.getElementById('dbEngineBadge');
+      if (dbBadge && health.database_engine) {
+        dbBadge.innerHTML = `🗄️ Storage: <b>${health.database_engine}</b> • Click <b>"✏️ Edit Course Details"</b> below to edit any course`;
+      }
       const sel = document.getElementById('globalDeptSelect');
       sel.innerHTML = state.departments.map(d =>
         `<option value="${d.id}" ${d.id === state.selectedDeptId ? 'selected' : ''}>${d.code} — ${d.name}</option>`
@@ -1262,7 +1270,11 @@
 
       closeModal('editCourseModal');
       showToast(data.message, 'success');
-      await refreshAllData();
+      if (state.selectedLevel !== 0 && state.selectedLevel !== level) {
+        setGlobalLevel(level);
+      } else {
+        await refreshAllData();
+      }
     }
 
     async function submitNewDepartment() {
@@ -1314,7 +1326,11 @@
       document.getElementById('newCourseTitle').value = '';
       document.getElementById('newCourseLecturer').value = '';
       showToast(data.message, 'success');
-      await refreshAllData();
+      if (state.selectedLevel !== 0 && state.selectedLevel !== level) {
+        setGlobalLevel(level);
+      } else {
+        await refreshAllData();
+      }
     }
 
     // Initialize App on Load
