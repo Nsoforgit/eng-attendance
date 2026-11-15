@@ -604,7 +604,7 @@
           <label class="block text-xs text-slate-400 mb-1">Course Lecturer Name</label>
           <input type="text" id="newCourseLecturer" placeholder="e.g. Engr. Dr. T. O. Briggs" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
-        <button onclick="submitNewCourse()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
+        <button onclick="submitNewCourse()" id="addCourseSubmitBtn" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
           Add Departmental Course
         </button>
       </div>
@@ -1625,6 +1625,8 @@
     }
 
     async function submitNewCourse() {
+      const btn = document.getElementById('addCourseSubmitBtn');
+      if (btn && btn.disabled) return;
       const course_code = document.getElementById('newCourseCode').value.trim().toUpperCase();
       const level = parseInt(document.getElementById('newCourseLevel').value, 10);
       const semester = parseInt(document.getElementById('newCourseSemester').value, 10);
@@ -1632,35 +1634,46 @@
       const lecturer_name = document.getElementById('newCourseLecturer').value.trim();
       if (!course_code || !course_title || !lecturer_name) return showToast('Fill all course fields', 'error');
 
-      const res = await fetch('/api/courses', {
-        method: 'POST',
-        headers: authHeaders('hod'),
-        body: JSON.stringify({
-          department_id: state.selectedDeptId,
-          course_code,
-          course_title,
-          level,
-          semester,
-          credit_units: 3,
-          lecturer_name,
-          lecturer_staff_id: `STF-${course_code.replace(/\s+/g, '')}`
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) return showToast(data.detail || 'Error adding course', 'error');
-
-      closeModal('courseModal');
-      document.getElementById('newCourseCode').value = '';
-      document.getElementById('newCourseTitle').value = '';
-      document.getElementById('newCourseLecturer').value = '';
-      showToast(data.message, 'success');
-      if (state.selectedSemester !== 0 && state.selectedSemester !== semester) {
-        setGlobalSemester(semester);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving Course...';
       }
-      if (state.selectedLevel !== 0 && state.selectedLevel !== level) {
-        setGlobalLevel(level);
-      } else {
-        await refreshAllData();
+      try {
+        const res = await fetch('/api/courses', {
+          method: 'POST',
+          headers: authHeaders('hod'),
+          body: JSON.stringify({
+            department_id: state.selectedDeptId,
+            course_code,
+            course_title,
+            level,
+            semester,
+            credit_units: 3,
+            lecturer_name,
+            lecturer_staff_id: `STF-${course_code.replace(/\s+/g, '')}`
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) return showToast(data.detail || 'Error adding course', 'error');
+
+        closeModal('courseModal');
+        document.getElementById('newCourseCode').value = '';
+        document.getElementById('newCourseTitle').value = '';
+        document.getElementById('newCourseLecturer').value = '';
+        showToast(data.message, data.already_existed ? 'warn' : 'success');
+        if (state.selectedSemester !== 0 && state.selectedSemester !== semester) {
+          setGlobalSemester(semester);
+        }
+        if (state.selectedLevel !== 0 && state.selectedLevel !== level) {
+          setGlobalLevel(level);
+        } else {
+          await refreshAllData();
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Add Departmental Course';
+        }
       }
     }
 

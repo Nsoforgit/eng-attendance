@@ -226,13 +226,38 @@ def generate_deterministic_signature(seed_text: str, dims: int = 32) -> List[flo
     return [round(v / norm, 5) for v in vals]
 
 
-def infer_semester_from_code(course_code: str) -> int:
-    """Infers 1st vs 2nd semester from standard Nigerian university course numbering (odd=1, even=2)."""
-    digits = [ch for ch in course_code if ch.isdigit()]
-    if digits:
-        last_digit = int(digits[-1])
-        return 2 if last_digit % 2 == 0 else 1
-    return 1
+def normalize_course_code(code: str) -> str:
+    """Formats course codes consistently (e.g. 'pee571' or 'PEE  571' -> 'PEE 571')."""
+    import re
+    raw = re.sub(r"\s+", "", code.strip().upper())
+    m = re.match(r"^([A-Z]{2,4})(\d{3}[A-Z]?)$", raw)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
+    return re.sub(r"\s+", " ", code.strip().upper())
+
+
+def deduplicate_courses_in_db(db: Session):
+    """Merges any duplicate courses (like multiple PEE 571 entries) and keeps only 1 clean record."""
+    all_courses = db.query(Course).order_by(Course.id.asc()).all()
+    seen = {}
+    removed_any = False
+    for c in all_courses:
+        norm_code = normalize_course_code(c.course_code)
+        if c.course_code != norm_code:
+            c.course_code = norm_code
+            removed_any = True
+        key = (c.department_id, norm_code)
+        if key in seen:
+            primary = seen[key]
+            # Reassign any lecture sessions or attendance records to the primary course before deleting duplicate
+            db.query(LectureSession).filter(LectureSession.course_id == c.id).update({"course_id": primary.id})
+            db.query(AttendanceRecord).filter(AttendanceRecord.course_id == c.id).update({"course_id": primary.id})
+            db.delete(c)
+            removed_any = True
+        else:
+            seen[key] = c
+    if removed_any:
+        db.commit()
 
 
 def run_schema_migrations():
@@ -269,6 +294,9 @@ def init_and_seed_db():
             db.delete(c_del)
         if pee310_courses:
             db.commit()
+
+        # Deduplicate any duplicate courses (such as multiple PEE 571 entries)
+        deduplicate_courses_in_db(db)
 
         # Migrate legacy PET code to PEE if present, and ensure all 13 departments exist
         legacy_pet = db.query(Department).filter(Department.code == "PET").first()
@@ -777,7 +805,19 @@ def create_course(
     if payload.semester not in (1, 2):
         raise HTTPException(status_code=400, detail="Semester must be 1 (First Semester) or 2 (Second Semester).")
 
-    code_clean = payload.course_code.strip().upper()
+    code_clean = normalize_course_code(payload.course_code)
+    existing_course = db.query(Course).filter(
+        Course.department_id == payload.department_id,
+        Course.course_code == code_clean
+    ).first()
+    if existing_course:
+        sem_label = "First Semester" if existing_course.semester == 1 else "Second Semester"
+        return {
+            "message": f"Course {existing_course.course_code} ({sem_label}) is already registered.",
+            "id": existing_course.id,
+            "already_existed": True,
+        }
+
     staff_id = (payload.lecturer_staff_id or f"STF-{code_clean.replace(' ', '')}").strip().upper()
     c = Course(
         department_id=payload.department_id,
@@ -816,7 +856,7 @@ def update_course_details(
     if payload.semester not in (1, 2):
         raise HTTPException(status_code=400, detail="Semester must be 1 (First Semester) or 2 (Second Semester).")
 
-    course.course_code = payload.course_code.strip().upper()
+    course.course_code = normalize_course_code(payload.course_code)
     course.course_title = payload.course_title.strip()
     course.level = payload.level
     course.semester = payload.semester
