@@ -152,10 +152,24 @@
       </div>
 
       <div class="space-y-3">
+        <!-- Course Lecturer Per-Course & Co-Lecturer Selection (Shown ONLY when unlocking Tab 2: Course Lecturer) -->
+        <div id="gateLecturerGroup" class="hidden space-y-3 p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30">
+          <div>
+            <label class="block text-xs text-emerald-300 font-semibold mb-1">1. Select Your Assigned Course (Synced from HOD Registry)</label>
+            <select id="gateLecturerCourseSelect" onchange="onGateLecturerCourseChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-mono text-white"></select>
+            <p class="text-[11px] text-slate-400 mt-1">Strict Data Isolation: Unlocking a course grants access <b>only</b> to that course's database and attendance records.</p>
+          </div>
+          <div>
+            <label class="block text-xs text-teal-300 font-semibold mb-1">2. Select Lecturer Taking Class / Signing In Today</label>
+            <select id="gateLecturerNameSelect" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-medium"></select>
+            <p class="text-[11px] text-slate-400 mt-1">For co-taught courses (e.g. Prof. Oyeneyin & Engr. Omoregbe), every session & synced record logs which lecturer taught that day.</p>
+          </div>
+        </div>
+
         <div id="gatePinGroup">
           <label id="gatePinLabel" class="block text-xs text-slate-300 font-medium mb-1">Security Access PIN</label>
           <input type="password" id="gatePinInput" placeholder="Enter 4-digit PIN (Default Demo PIN: 1234)" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
-          <p class="text-[11px] text-slate-400 mt-1">Default PIN for testing is <code class="text-emerald-400 font-mono">1234</code> (HOD can customize their name & PIN inside the dashboard).</p>
+          <p id="gatePinHint" class="text-[11px] text-slate-400 mt-1">Default PIN for testing is <code class="text-emerald-400 font-mono">1234</code> (Each Course Lecturer & HOD can customize their private PIN inside the portal).</p>
         </div>
 
         <div id="gateStudentGroup" class="hidden">
@@ -262,24 +276,58 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- TAB 2: COURSE LECTURER PORTAL                                           -->
+    <!-- TAB 2: COURSE LECTURER PORTAL (STRICT PER-COURSE ISOLATION & CO-TEACH)  -->
     <!-- ======================================================================= -->
     <section id="panel-lecturer" class="hidden space-y-6">
+      <!-- Isolated Course Workspace Top Banner -->
+      <div class="glass rounded-2xl p-5 sm:p-6 border border-emerald-500/40 bg-emerald-950/10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-mono font-bold uppercase">
+              🔒 Isolated Course Workspace
+            </span>
+            <span id="lecturerCourseLevelSemPill" class="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[11px] font-mono">
+              400L • 1st Semester
+            </span>
+          </div>
+          <h2 id="lecturerIsolatedHeading" class="font-display text-2xl sm:text-3xl font-bold text-white">
+            PEE 401 — Applied Reservoir Engineering II
+          </h2>
+          <p id="lecturerIsolatedSub" class="text-xs sm:text-sm text-slate-300">
+            Assigned Lecturers: <b id="lecturerAssignedNames" class="text-white">Prof. Oyeneyin & Engr. Omoregbe</b> • Signed-In Lecturer on Duty: <b id="lecturerActiveDutyName" class="text-emerald-400">Prof. Oyeneyin</b>
+          </p>
+          <!-- Co-Lecturer Class Attribution Breakdown -->
+          <div id="lecturerCoTeachBreakdown" class="flex items-center gap-2 flex-wrap pt-1.5"></div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 no-print shrink-0">
+          <button onclick="openEditLecturerPinModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+            🔐 Customize Course PIN & Co-Lecturers
+          </button>
+          <button onclick="exportLecturerCourseCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+            ⬇ Export My Course CSV
+          </button>
+          <button onclick="lockCurrentPortal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition">
+            🔄 Switch Course / Lecturer
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Left: Start New Lecture Session -->
+        <!-- Left: Start New Lecture Session (Locked Strictly to This Course) -->
         <div class="glass rounded-2xl p-5 border border-slate-800 space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="font-display text-lg font-bold text-white">Start Class Attendance Session</h3>
             <span id="lecturerSemBadge" class="px-2 py-0.5 text-[11px] font-mono rounded bg-teal-500/20 text-teal-300">1st Semester</span>
           </div>
           <p class="text-xs text-slate-400">
-            Initiate a time-bound biometric session for a 300L, 400L, or 500L departmental course in the selected semester.
+            Locked strictly to your authenticated course so other lecturers' courses cannot be viewed or modified.
           </p>
 
           <div class="space-y-3">
             <div>
-              <label class="block text-xs text-slate-400 mb-1">Select Departmental Course (300L–500L)</label>
-              <select id="lecturerCourseSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"></select>
+              <label class="block text-xs text-emerald-400 font-semibold mb-1">Authenticated Course (Isolated Database)</label>
+              <select id="lecturerCourseSelect" disabled class="w-full bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-2 text-sm font-mono font-bold text-emerald-300 opacity-95 cursor-not-allowed"></select>
             </div>
             <div class="grid grid-cols-3 gap-2">
               <div class="col-span-1">
@@ -287,8 +335,8 @@
                 <input type="number" id="sessionWeekInput" value="6" min="1" max="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono" />
               </div>
               <div class="col-span-2">
-                <label class="block text-xs text-slate-400 mb-1">Lecturer / Authorizing Name</label>
-                <input type="text" id="sessionStarterInput" placeholder="e.g. Dr. M. O. Nwosu" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label class="block text-xs text-teal-300 font-semibold mb-1">Lecturer Taking Class Today *</label>
+                <select id="sessionStarterInput" onchange="onDutyLecturerSwitch(this.value)" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-3 py-2 text-sm text-white font-medium"></select>
               </div>
             </div>
             <div>
@@ -296,23 +344,26 @@
               <input type="text" id="sessionTopicInput" placeholder="e.g. Week 6: Pressure Transient Analysis & Well Testing" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <button onclick="createNewLectureSession()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
-              🚀 Launch Live Biometric Attendance Session
+              🚀 Launch Session Under My Name
             </button>
           </div>
         </div>
 
-        <!-- Right: Active & Recent Lecture Sessions -->
+        <!-- Right: Active & Recent Lecture Sessions for THIS Course Only -->
         <div class="lg:col-span-2 glass rounded-2xl p-5 border border-slate-800 space-y-4">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h3 class="font-display text-lg font-bold text-white">Departmental Lecture Sessions Log</h3>
-              <p class="text-xs text-slate-400">Filtered by selected Semester & Level. Click "Open Kiosk" on any active session to verify student biometrics.</p>
+              <h3 id="lecturerSessionsLogHeading" class="font-display text-lg font-bold text-white">My Course Lecture Sessions & Co-Lecturer Log</h3>
+              <p class="text-xs text-slate-400">Shows only sessions for your assigned course, clearly recording which lecturer taught and took attendance each day.</p>
             </div>
             <button onclick="loadSessionsList()" class="text-xs text-emerald-400 hover:underline">↻ Refresh</button>
           </div>
-          <div id="sessionsListContainer" class="space-y-3 max-h-[500px] overflow-y-auto pr-1"></div>
+          <div id="sessionsListContainer" class="space-y-3 max-h-[420px] overflow-y-auto pr-1"></div>
         </div>
       </div>
+
+      <!-- Bottom: Isolated Course Student Attendance & 70% Standing Sheet -->
+      <div id="lecturerCourseAttendanceContainer" class="space-y-4"></div>
     </section>
 
     <!-- ======================================================================= -->
@@ -601,8 +652,12 @@
           <input type="text" id="newCourseTitle" placeholder="e.g. Directional Drilling & Well Completion" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
         <div>
-          <label class="block text-xs text-slate-400 mb-1">Course Lecturer Name</label>
-          <input type="text" id="newCourseLecturer" placeholder="e.g. Engr. Dr. T. O. Briggs" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <label class="block text-xs text-slate-400 mb-1">Course Lecturer(s) (Separate Co-Lecturers with &amp; or ,)</label>
+          <input type="text" id="newCourseLecturer" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Initial Course Lecturer Access PIN</label>
+          <input type="password" id="newCoursePin" value="1234" placeholder="Default: 1234" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
         </div>
         <button onclick="submitNewCourse()" id="addCourseSubmitBtn" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
           Add Departmental Course
@@ -621,7 +676,7 @@
         </div>
         <button onclick="closeModal('editCourseModal')" class="text-slate-400 hover:text-white">✕</button>
       </div>
-      <p class="text-xs text-slate-400">Edit the course details that were inputted when adding this course:</p>
+      <p class="text-xs text-slate-400">Edit the course details or co-lecturers assigned to this course:</p>
       <input type="hidden" id="editCourseId" />
       <div class="space-y-3">
         <div class="grid grid-cols-3 gap-2">
@@ -650,8 +705,12 @@
           <input type="text" id="editCourseTitle" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
         <div>
-          <label class="block text-xs text-slate-400 mb-1">Course Lecturer Name</label>
-          <input type="text" id="editCourseLecturer" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <label class="block text-xs text-slate-400 mb-1">Assigned Course Lecturer(s) (Separate Co-Lecturers with &amp; or ,)</label>
+          <input type="text" id="editCourseLecturer" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Reset Course Lecturer PIN (Leave blank to keep current PIN)</label>
+          <input type="password" id="editCoursePin" placeholder="Enter new 4+ digit Course PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
         </div>
         <div class="flex items-center gap-2 pt-1">
           <button onclick="submitEditCourse()" class="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
@@ -661,6 +720,35 @@
             🗑️ Delete Course
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LECTURER CUSTOMIZE PRIVATE COURSE PIN & CO-LECTURERS -->
+  <div id="editLecturerPinModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-emerald-500/40 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-mono uppercase text-emerald-400">Course Data Isolation &amp; Privacy</span>
+          <h3 id="editLecturerPinModalTitle" class="font-display text-lg font-bold text-white">Customize Private Course PIN</h3>
+        </div>
+        <button onclick="closeModal('editLecturerPinModal')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">
+        Set a private Access PIN for this course so only the assigned lecturer(s) for this course can unlock its workspace and attendance data.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Assigned Lecturer(s) for This Course (Separate Co-Lecturers with &amp; or ,)</label>
+          <input type="text" id="editLecturerCourseNamesInput" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-emerald-400 font-semibold mb-1">New Private Course Lecturer PIN (4+ digits/characters) *</label>
+          <input type="password" id="editLecturerCoursePinInput" placeholder="Enter private PIN for this course" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+        </div>
+        <button onclick="submitLecturerCoursePinUpdate()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+          🔐 Save Private Course PIN &amp; Co-Lecturers
+        </button>
       </div>
     </div>
   </div>
@@ -676,9 +764,11 @@
       selectedLevel: 400,    // 300, 400, 500, or 0 (ALL)
       selectedSemester: 1,   // 1 = First Semester, 2 = Second Semester, 0 = Both
       courses: [],
+      allDeptCourses: [],    // All courses in the selected department (for the Lecturer Course Gate)
       students: [],
       sessions: [],
       hodReport: null,
+      lecturerCourseReport: null,
       simulatedOffline: false,
       offlineQueue: JSON.parse(localStorage.getItem('eng_offline_attendance_queue') || '[]'),
       cachedTemplates: JSON.parse(localStorage.getItem('eng_cached_biometric_templates') || '{}'),
@@ -689,11 +779,20 @@
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
+    function parseLecturersClient(raw) {
+      if (!raw) return ['Course Lecturer'];
+      const parts = String(raw).split(/\s*(?:,|&|\/|;|\band\b)\s*/i).map(s => s.trim()).filter(Boolean);
+      return parts.length ? parts : [String(raw).trim()];
+    }
+
     function getActiveRoleSession(role) {
       const sess = state.roleSessions[role];
       if (!sess) return null;
-      // For HOD/Lecturer/CourseRep, verify the token belongs to the selected department
       if (role !== 'student' && sess.department_id !== state.selectedDeptId) {
+        return null;
+      }
+      // Require course_id on lecturer sessions so old generic tokens re-authenticate per course
+      if (role === 'lecturer' && !sess.course_id) {
         return null;
       }
       return sess;
@@ -779,8 +878,40 @@
     }
 
     // =========================================================================
-    // ROLE PORTAL SECURITY & AUTHENTICATION GATE
+    // ROLE PORTAL SECURITY & PER-COURSE LECTURER ISOLATION GATE
     // =========================================================================
+    function populateGateLecturerCourses() {
+      const courseSel = document.getElementById('gateLecturerCourseSelect');
+      if (!courseSel) return;
+      const list = state.allDeptCourses.length ? state.allDeptCourses : state.courses;
+      const prevVal = courseSel.value;
+      courseSel.innerHTML = list.map(c =>
+        `<option value="${c.id}">${c.course_code} — ${c.course_title} (${c.level}L • ${c.semester === 2 ? '2nd Sem' : '1st Sem'}) [${c.lecturer_name}]</option>`
+      ).join('');
+      if (prevVal && list.some(c => String(c.id) === String(prevVal))) {
+        courseSel.value = prevVal;
+      } else {
+        // Default to PEE 401 if present so the user sees Prof. Oyeneyin & Engr. Omoregbe right away
+        const pee401 = list.find(c => c.course_code === 'PEE 401');
+        if (pee401) courseSel.value = String(pee401.id);
+      }
+      onGateLecturerCourseChange();
+    }
+
+    function onGateLecturerCourseChange() {
+      const courseSel = document.getElementById('gateLecturerCourseSelect');
+      const nameSel = document.getElementById('gateLecturerNameSelect');
+      if (!courseSel || !nameSel) return;
+      const list = state.allDeptCourses.length ? state.allDeptCourses : state.courses;
+      const selectedCourse = list.find(c => String(c.id) === String(courseSel.value));
+      const lecturers = selectedCourse
+        ? (selectedCourse.assigned_lecturers || parseLecturersClient(selectedCourse.lecturer_name))
+        : ['Course Lecturer'];
+      nameSel.innerHTML = lecturers.map(l =>
+        `<option value="${l.replace(/"/g, '&quot;')}">👨‍🏫 ${l} (${selectedCourse ? selectedCourse.course_code : ''})</option>`
+      ).join('');
+    }
+
     function renderSecurityState() {
       const role = state.activeTab;
       const sess = getActiveRoleSession(role);
@@ -805,7 +936,9 @@
         authLabel.innerHTML = `🔓 Signed in: <b class="text-emerald-400">${sess.actor_name}</b>`;
         logoutBtn.classList.remove('hidden');
 
-        if (role === 'student') {
+        if (role === 'lecturer') {
+          renderIsolatedLecturerWorkspace();
+        } else if (role === 'student') {
           document.getElementById('studentLookupInput').value = sess.matric_no;
           document.getElementById('studentSelfMatric').value = sess.matric_no;
           lookupStudentDashboard();
@@ -819,6 +952,7 @@
         authLabel.innerHTML = `<span class="text-amber-400">🔒 Portal Locked</span>`;
         logoutBtn.classList.add('hidden');
 
+        const lectGroup = document.getElementById('gateLecturerGroup');
         const pinGroup = document.getElementById('gatePinGroup');
         const studentGroup = document.getElementById('gateStudentGroup');
         const title = document.getElementById('gateTitle');
@@ -831,13 +965,16 @@
           title.textContent = `Unlock Department HOD Dashboard`;
           sub.textContent = `Only the Head of Department for ${deptLabel} can add/edit/delete courses or modify HOD settings.`;
           pinLabel.textContent = `Department HOD Security PIN`;
+          lectGroup.classList.add('hidden');
           pinGroup.classList.remove('hidden');
           studentGroup.classList.add('hidden');
         } else if (role === 'lecturer') {
-          badge.textContent = `Course Lecturer Security Layer • ${deptLabel}`;
-          title.textContent = `Unlock Course Lecturer Portal`;
-          sub.textContent = `Verify your Lecturer PIN to launch or lock 1st & 2nd Semester class attendance sessions.`;
-          pinLabel.textContent = `Course Lecturer Staff PIN`;
+          badge.textContent = `Isolated Course Lecturer Security • ${deptLabel}`;
+          title.textContent = `Unlock Your Assigned Course Workspace`;
+          sub.textContent = `Select your assigned course and your lecturer name below. You will only see and control your own course's database.`;
+          pinLabel.textContent = `3. Enter Course Lecturer Security PIN`;
+          populateGateLecturerCourses();
+          lectGroup.classList.remove('hidden');
           pinGroup.classList.remove('hidden');
           studentGroup.classList.add('hidden');
         } else if (role === 'courserep') {
@@ -845,12 +982,14 @@
           title.textContent = `Unlock Level Course Rep Kiosk`;
           sub.textContent = `Authorized 300L, 400L & 500L Course Reps only: verify PIN to enroll student biometrics or run the classroom scanner.`;
           pinLabel.textContent = `Level Course Rep Authorization PIN`;
+          lectGroup.classList.add('hidden');
           pinGroup.classList.remove('hidden');
           studentGroup.classList.add('hidden');
         } else if (role === 'student') {
           badge.textContent = `Student Profile Security Layer`;
           title.textContent = `Sign In to Student Profile Portal`;
           sub.textContent = `Enter your enrolled Matriculation Number to view your personal 70% exam eligibility and verify your phone Passkey.`;
+          lectGroup.classList.add('hidden');
           pinGroup.classList.add('hidden');
           studentGroup.classList.remove('hidden');
         }
@@ -861,6 +1000,12 @@
       const role = state.activeTab;
       const pin = document.getElementById('gatePinInput').value.trim();
       const matric_no = document.getElementById('gateMatricInput').value.trim().toUpperCase();
+      const course_id = role === 'lecturer'
+        ? parseInt(document.getElementById('gateLecturerCourseSelect').value, 10)
+        : undefined;
+      const lecturer_name = role === 'lecturer'
+        ? document.getElementById('gateLecturerNameSelect').value
+        : undefined;
 
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -870,7 +1015,9 @@
           department_id: state.selectedDeptId,
           pin: role !== 'student' ? pin : undefined,
           matric_no: role === 'student' ? matric_no : undefined,
-          level: state.selectedLevel || 400
+          level: state.selectedLevel || 400,
+          course_id,
+          lecturer_name
         })
       });
       const data = await res.json();
@@ -883,6 +1030,7 @@
       document.getElementById('gatePinInput').value = '';
       showToast(data.message, 'success');
       renderSecurityState();
+      await refreshAllData();
     }
 
     function lockCurrentPortal() {
@@ -920,7 +1068,6 @@
       });
       const semText = sem === 1 ? 'First Semester' : (sem === 2 ? 'Second Semester' : '1st & 2nd Semesters');
       document.getElementById('hodSemesterPill').textContent = semText;
-      document.getElementById('lecturerSemBadge').textContent = semText;
       document.getElementById('studentSemBadge').textContent = semText;
       document.getElementById('hodCourseSelect').value = '';
       refreshAllData();
@@ -971,16 +1118,21 @@
       try {
         const lvlParam = state.selectedLevel ? `&level=${state.selectedLevel}` : '';
         const semParam = state.selectedSemester ? `&semester=${state.selectedSemester}` : '';
-        const [coursesRes, studentsRes, sessionsRes] = await Promise.all([
+        const [coursesRes, allDeptCoursesRes, studentsRes, sessionsRes] = await Promise.all([
           fetch(`/api/courses?department_id=${state.selectedDeptId}${lvlParam}${semParam}`),
-          fetch(`/api/students?department_id=${state.selectedDeptId}${lvlParam}&include_templates=true`),
-          fetch(`/api/sessions?department_id=${state.selectedDeptId}${lvlParam}${semParam}`)
+          fetch(`/api/courses?department_id=${state.selectedDeptId}`),
+          fetch(`/api/students?department_id=${state.selectedDeptId}&include_templates=true`),
+          fetch(`/api/sessions?department_id=${state.selectedDeptId}`)
         ]);
         state.courses = await coursesRes.json();
-        state.students = await studentsRes.json();
+        state.allDeptCourses = await allDeptCoursesRes.json();
+        const allStudents = await studentsRes.json();
+        state.students = state.selectedLevel
+          ? allStudents.filter(s => s.level === state.selectedLevel)
+          : allStudents;
         state.sessions = await sessionsRes.json();
 
-        state.students.forEach(s => {
+        allStudents.forEach(s => {
           if (s.face_descriptor) {
             state.cachedTemplates[s.matric_no] = s.face_descriptor;
           }
@@ -988,7 +1140,11 @@
         localStorage.setItem('eng_cached_biometric_templates', JSON.stringify(state.cachedTemplates));
 
         populateDropdowns();
+        if (state.activeTab === 'lecturer' && !getActiveRoleSession('lecturer')) {
+          populateGateLecturerCourses();
+        }
         await loadHodEligibility();
+        await renderIsolatedLecturerWorkspace();
         renderSessionsList();
         if (state.activeTab === 'student' && getActiveRoleSession('student')) {
           lookupStudentDashboard();
@@ -1006,22 +1162,15 @@
         state.courses.map(c => `<option value="${c.id}">${c.course_code} - ${c.course_title} (${c.level}L • ${c.semester === 2 ? '2nd Sem' : '1st Sem'})</option>`).join('');
       hodCourseSel.value = prevCourse;
 
-      const lectSel = document.getElementById('lecturerCourseSelect');
-      lectSel.innerHTML = state.courses.map(c =>
-        `<option value="${c.id}" data-lecturer="${c.lecturer_name}">${c.course_code} (${c.level}L • ${c.semester === 2 ? '2nd Sem' : '1st Sem'}) — ${c.course_title}</option>`
+      const filteredSessions = state.sessions.filter(s => {
+        if (state.selectedLevel && s.level !== state.selectedLevel) return false;
+        if (state.selectedSemester && s.semester !== state.selectedSemester) return false;
+        return true;
+      });
+      const sessionOptions = filteredSessions.map(s =>
+        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒'} ${s.course_code} (Wk ${s.week_number} • Taught by ${s.started_by}) - ${s.session_uid}</option>`
       ).join('');
-      if (state.courses[0]) {
-        document.getElementById('sessionStarterInput').value = state.courses[0].lecturer_name;
-      }
-      lectSel.onchange = () => {
-        const opt = lectSel.options[lectSel.selectedIndex];
-        if (opt) document.getElementById('sessionStarterInput').value = opt.getAttribute('data-lecturer') || '';
-      };
-
-      const sessionOptions = state.sessions.map(s =>
-        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒'} ${s.course_code} (${s.semester === 2 ? '2nd Sem' : '1st Sem'} Wk ${s.week_number}) - ${s.session_uid}</option>`
-      ).join('');
-      document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || '<option value="">No sessions in this semester — start one in Lecturer tab</option>';
+      document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || '<option value="">No sessions in this filter — start one in Lecturer tab</option>';
       document.getElementById('studentSelfSessionSelect').innerHTML = sessionOptions || '<option value="">No active sessions</option>';
 
       document.getElementById('kioskStudentSelect').innerHTML = state.students.map(st =>
@@ -1117,6 +1266,11 @@
           ? '<span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono text-xs">2nd Semester</span>'
           : '<span class="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 font-mono text-xs">1st Semester</span>';
 
+        const breakdownPills = (course.lecturer_breakdown || []).map(lb => {
+          const wkStr = lb.weeks && lb.weeks.length ? ` (Wk ${lb.weeks.join(', Wk ')})` : '';
+          return `<span class="px-2.5 py-0.5 rounded-lg bg-slate-800/90 border border-slate-700 text-[11px] font-mono text-teal-300">👨‍🏫 ${lb.lecturer_name}: <b>${lb.sessions_taught}</b> class${lb.sessions_taught === 1 ? '' : 'es'}${wkStr}</span>`;
+        }).join('');
+
         return `
           <div class="glass rounded-2xl border border-slate-800 overflow-hidden">
             <div class="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
@@ -1131,8 +1285,12 @@
                   </button>
                 </div>
                 <p class="text-xs text-slate-400 mt-1">
-                  Course Lecturer: <b class="text-slate-200">${course.lecturer_name}</b> • Total Lectures Held: <b class="text-white font-mono">${course.total_sessions_held}</b>
+                  Assigned Lecturer(s): <b class="text-slate-200">${course.lecturer_name}</b> • Total Lectures Held: <b class="text-white font-mono">${course.total_sessions_held}</b>
                 </p>
+                <div class="flex items-center gap-1.5 flex-wrap mt-2">
+                  <span class="text-[11px] font-mono text-slate-400">Co-Lecturer Class Attribution:</span>
+                  ${breakdownPills}
+                </div>
               </div>
               <div class="flex items-center gap-3 text-xs font-mono">
                 <span class="px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
@@ -1170,7 +1328,7 @@
 
     function exportHodCsv() {
       if (!state.hodReport) return;
-      let rows = [['Department', 'Course Code', 'Level', 'Semester', 'Lecturer', 'Matric No', 'Student Name', 'Institutional Email', 'Attended', 'Total Classes', 'Attendance %', 'Exam Verdict']];
+      let rows = [['Department', 'Course Code', 'Level', 'Semester', 'Assigned Lecturers', 'Matric No', 'Student Name', 'Institutional Email', 'Attended', 'Total Classes', 'Attendance %', 'Exam Verdict']];
       state.hodReport.courses.forEach(c => {
         c.students.forEach(s => {
           rows.push([
@@ -1200,15 +1358,208 @@
     }
 
     // =========================================================================
-    // LECTURER SESSIONS MANAGEMENT
+    // ISOLATED COURSE LECTURER WORKSPACE & CO-LECTURER SESSIONS MANAGEMENT
     // =========================================================================
+    async function renderIsolatedLecturerWorkspace() {
+      const lectSess = getActiveRoleSession('lecturer');
+      if (!lectSess || !lectSess.course_id) return;
+
+      const courseObj = state.allDeptCourses.find(c => c.id === lectSess.course_id) || lectSess;
+      const semLabel = (courseObj.semester || 1) === 2 ? '2nd Semester' : '1st Semester';
+      const assignedList = courseObj.assigned_lecturers || parseLecturersClient(courseObj.lecturer_name || lectSess.lecturer_name);
+
+      document.getElementById('lecturerCourseLevelSemPill').textContent = `${courseObj.level}L • ${semLabel}`;
+      document.getElementById('lecturerSemBadge').textContent = semLabel;
+      document.getElementById('lecturerIsolatedHeading').textContent = `${courseObj.course_code} — ${courseObj.course_title}`;
+      document.getElementById('lecturerAssignedNames').textContent = assignedList.join(' & ');
+      document.getElementById('lecturerActiveDutyName').textContent = lectSess.lecturer_name;
+      document.getElementById('lecturerSessionsLogHeading').textContent = `${courseObj.course_code} Lecture Sessions & Co-Lecturer Attribution Log`;
+
+      // Lock the course select strictly to this lecturer's authenticated course
+      const lectCourseSel = document.getElementById('lecturerCourseSelect');
+      lectCourseSel.innerHTML = `<option value="${courseObj.id}" selected>🔒 ${courseObj.course_code} (${courseObj.level}L • ${semLabel}) — ${courseObj.course_title}</option>`;
+
+      // Populate the co-lecturer on duty dropdown for starting today's class
+      const starterSel = document.getElementById('sessionStarterInput');
+      starterSel.innerHTML = assignedList.map(l =>
+        `<option value="${l.replace(/"/g, '&quot;')}" ${l === lectSess.lecturer_name ? 'selected' : ''}>👨‍🏫 ${l}</option>`
+      ).join('');
+
+      // Fetch isolated course attendance & co-lecturer breakdown report for this course ONLY
+      try {
+        const res = await fetch(`/api/hod/eligibility?department_id=${state.selectedDeptId}&course_id=${lectSess.course_id}`);
+        const rep = await res.json();
+        const cRep = rep.courses && rep.courses[0] ? rep.courses[0] : null;
+        state.lecturerCourseReport = cRep;
+
+        const breakdownEl = document.getElementById('lecturerCoTeachBreakdown');
+        if (cRep && cRep.lecturer_breakdown) {
+          breakdownEl.innerHTML = `<span class="text-xs font-mono text-slate-400">Classes Taught Breakdown:</span>` +
+            cRep.lecturer_breakdown.map(lb => {
+              const wkText = lb.weeks && lb.weeks.length ? ` (Weeks: ${lb.weeks.join(', ')})` : '';
+              return `<span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-teal-500/30 text-xs font-mono text-teal-300">👨‍🏫 <b>${lb.lecturer_name}</b>: ${lb.sessions_taught} lecture${lb.sessions_taught === 1 ? '' : 's'}${wkText}</span>`;
+            }).join('');
+        }
+
+        const tableBox = document.getElementById('lecturerCourseAttendanceContainer');
+        if (cRep) {
+          const rowsHtml = cRep.students.map((st, idx) => {
+            const badgeClass = st.exam_eligible
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+              : 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold';
+            const barColor = st.attendance_pct >= 75 ? 'bg-emerald-500' : (st.attendance_pct >= 70 ? 'bg-amber-400' : 'bg-rose-500');
+            return `
+              <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition">
+                <td class="py-2.5 px-4 font-mono text-xs text-slate-400">${idx + 1}</td>
+                <td class="py-2.5 px-4 font-mono text-xs font-semibold text-white">${st.matric_no}</td>
+                <td class="py-2.5 px-4 text-sm text-slate-200">${st.full_name}</td>
+                <td class="py-2.5 px-4 font-mono text-xs text-slate-400">${st.email || '—'}</td>
+                <td class="py-2.5 px-4 font-mono text-xs text-slate-300">${st.attended_classes} / ${st.total_classes}</td>
+                <td class="py-2.5 px-4 w-44">
+                  <div class="flex items-center gap-2">
+                    <div class="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                      <div class="h-full ${barColor}" style="width: ${Math.min(100, st.attendance_pct)}%"></div>
+                    </div>
+                    <span class="font-mono text-xs font-bold ${st.exam_eligible ? 'text-emerald-400' : 'text-rose-400'}">${st.attendance_pct}%</span>
+                  </div>
+                </td>
+                <td class="py-2.5 px-4">
+                  <span class="px-2.5 py-1 rounded-full text-[11px] font-mono border ${badgeClass}">${st.status_badge}</span>
+                </td>
+              </tr>
+            `;
+          }).join('');
+
+          tableBox.innerHTML = `
+            <div class="glass rounded-2xl border border-slate-800 overflow-hidden">
+              <div class="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 class="font-display font-bold text-base sm:text-lg text-white">
+                    📋 ${cRep.course_code} Student Attendance &amp; 70% Exam Standing (Isolated Course View)
+                  </h3>
+                  <p class="text-xs text-slate-400">
+                    Showing enrolled ${cRep.level}L students for <b>${cRep.course_code}</b> only • Total Classes Held: <b>${cRep.total_sessions_held}</b>
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-mono">
+                  <span class="px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">Cleared (≥70%): <b>${cRep.eligible_count}</b></span>
+                  <span class="px-3 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300">Barred (<70%): <b>${cRep.barred_count}</b></span>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                  <thead>
+                    <tr class="border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400 bg-slate-950/50">
+                      <th class="py-2.5 px-4">#</th>
+                      <th class="py-2.5 px-4">Matric No</th>
+                      <th class="py-2.5 px-4">Student Name</th>
+                      <th class="py-2.5 px-4">Institutional Email</th>
+                      <th class="py-2.5 px-4">Classes Attended</th>
+                      <th class="py-2.5 px-4">Attendance %</th>
+                      <th class="py-2.5 px-4">70% Standing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rowsHtml || '<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">No students enrolled for this course level yet.</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }
+      } catch (e) {
+        console.warn('Error loading isolated course report:', e);
+      }
+    }
+
+    function onDutyLecturerSwitch(newLecturerName) {
+      const lectSess = getActiveRoleSession('lecturer');
+      if (!lectSess || !newLecturerName) return;
+      lectSess.lecturer_name = newLecturerName;
+      lectSess.actor_name = `${newLecturerName} (${lectSess.course_code})`;
+      state.roleSessions['lecturer'] = lectSess;
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+      document.getElementById('lecturerActiveDutyName').textContent = newLecturerName;
+      document.getElementById('activeAuthLabel').innerHTML = `🔓 Signed in: <b class="text-emerald-400">${lectSess.actor_name}</b>`;
+      showToast(`Active Lecturer on Duty switched to ${newLecturerName} for ${lectSess.course_code}`);
+    }
+
+    function openEditLecturerPinModal() {
+      const lectSess = getActiveRoleSession('lecturer');
+      if (!lectSess) return;
+      const courseObj = state.allDeptCourses.find(c => c.id === lectSess.course_id) || lectSess;
+      document.getElementById('editLecturerPinModalTitle').textContent = `Customize PIN & Co-Lecturers (${courseObj.course_code})`;
+      document.getElementById('editLecturerCourseNamesInput').value = courseObj.lecturer_name || (courseObj.assigned_lecturers || []).join(' & ');
+      document.getElementById('editLecturerCoursePinInput').value = '';
+      openModal('editLecturerPinModal');
+    }
+
+    async function submitLecturerCoursePinUpdate() {
+      const lectSess = getActiveRoleSession('lecturer');
+      if (!lectSess) return;
+      const lecturer_name = document.getElementById('editLecturerCourseNamesInput').value.trim();
+      const new_pin = document.getElementById('editLecturerCoursePinInput').value.trim();
+      if (!new_pin || new_pin.length < 4) {
+        return showToast('Please enter a new 4+ character private PIN for your course.', 'error');
+      }
+      const res = await fetch(`/api/courses/${lectSess.course_id}/lecturer-pin`, {
+        method: 'PUT',
+        headers: authHeaders('lecturer'),
+        body: JSON.stringify({ new_pin, lecturer_name })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Failed to update course PIN', 'error');
+
+      lectSess.assigned_lecturers = data.assigned_lecturers;
+      if (data.assigned_lecturers && !data.assigned_lecturers.includes(lectSess.lecturer_name)) {
+        lectSess.lecturer_name = data.assigned_lecturers[0];
+        lectSess.actor_name = `${lectSess.lecturer_name} (${lectSess.course_code})`;
+      }
+      state.roleSessions['lecturer'] = lectSess;
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+      closeModal('editLecturerPinModal');
+      showToast(data.message, 'success');
+      await refreshAllData();
+    }
+
+    function exportLecturerCourseCsv() {
+      const c = state.lecturerCourseReport;
+      if (!c) return showToast('Course report not loaded yet', 'error');
+      let rows = [['Course Code', 'Course Title', 'Level', 'Semester', 'Assigned Lecturers', 'Matric No', 'Student Name', 'Institutional Email', 'Attended', 'Total Classes', 'Attendance %', 'Exam Verdict']];
+      c.students.forEach(s => {
+        rows.push([
+          c.course_code,
+          c.course_title,
+          `${c.level}L`,
+          c.semester === 2 ? 'Second Semester' : 'First Semester',
+          c.lecturer_name,
+          s.matric_no,
+          s.full_name,
+          s.email || '',
+          s.attended_classes,
+          s.total_classes,
+          `${s.attendance_pct}%`,
+          s.exam_eligible ? 'CLEARED (>=70%)' : 'BARRED (<70%)'
+        ]);
+      });
+      const csvContent = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${c.course_code.replace(/\s+/g, '_')}_Attendance_70Pct.csv`;
+      a.click();
+      showToast(`Exported ${c.course_code} attendance sheet!`);
+    }
+
     async function createNewLectureSession() {
-      const courseId = parseInt(document.getElementById('lecturerCourseSelect').value, 10);
+      const lectSess = getActiveRoleSession('lecturer');
+      const courseId = lectSess ? lectSess.course_id : parseInt(document.getElementById('lecturerCourseSelect').value, 10);
       const week = parseInt(document.getElementById('sessionWeekInput').value, 10) || 1;
-      const startedBy = document.getElementById('sessionStarterInput').value.trim() || 'Course Lecturer';
+      const startedBy = document.getElementById('sessionStarterInput').value.trim() || (lectSess ? lectSess.lecturer_name : 'Course Lecturer');
       const topic = document.getElementById('sessionTopicInput').value.trim() || `Week ${week} Departmental Core Lecture`;
 
-      if (!courseId) return showToast('Please select a course first', 'error');
+      if (!courseId) return showToast('Please unlock your assigned course first', 'error');
 
       const res = await fetch('/api/sessions', {
         method: 'POST',
@@ -1229,20 +1580,30 @@
 
     function renderSessionsList() {
       const box = document.getElementById('sessionsListContainer');
-      if (!state.sessions.length) {
-        box.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No lecture sessions recorded for this level and semester yet.</div>`;
+      const lectSess = getActiveRoleSession('lecturer');
+      // Strict per-course isolation: only show sessions for the authenticated lecturer's course
+      const courseSessions = lectSess && lectSess.course_id
+        ? state.sessions.filter(s => s.course_id === lectSess.course_id)
+        : state.sessions;
+
+      if (!courseSessions.length) {
+        const cName = lectSess ? lectSess.course_code : 'this course';
+        box.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No lecture sessions recorded for <b>${cName}</b> yet. Select the Lecturer Taking Class Today on the left and click <b>"Launch Session Under My Name"</b>.</div>`;
         return;
       }
-      box.innerHTML = state.sessions.map(s => `
+      box.innerHTML = courseSessions.map(s => `
         <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div class="flex items-center gap-2 flex-wrap">
               <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold ${s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}">${s.status}</span>
               <span class="font-mono text-xs font-bold text-white">${s.course_code} (${s.level}L • ${s.semester === 2 ? '2nd Sem' : '1st Sem'}) • Week ${s.week_number}</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 text-[11px] font-mono font-semibold">
+                👨‍🏫 Taught &amp; Taken by: ${s.started_by}
+              </span>
               <span class="font-mono text-[11px] text-slate-500">${s.session_uid}</span>
             </div>
             <p class="text-sm font-medium text-slate-200 mt-1">${s.topic}</p>
-            <p class="text-xs text-slate-400 mt-0.5">Lecturer: ${s.started_by} • Verified Present: <b class="text-emerald-400 font-mono">${s.present_count} / ${s.total_class_size}</b> students</p>
+            <p class="text-xs text-slate-400 mt-0.5">Verified Biometric Attendance: <b class="text-emerald-400 font-mono">${s.present_count} / ${s.total_class_size}</b> students</p>
           </div>
           <div class="flex items-center gap-2">
             <button onclick="openSessionInKiosk('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
@@ -1544,6 +1905,7 @@
       document.getElementById('editCourseSemester').value = String(semester || 1);
       document.getElementById('editCourseTitle').value = title;
       document.getElementById('editCourseLecturer').value = lecturer;
+      document.getElementById('editCoursePin').value = '';
       openModal('editCourseModal');
     }
 
@@ -1554,6 +1916,7 @@
       const semester = parseInt(document.getElementById('editCourseSemester').value, 10);
       const course_title = document.getElementById('editCourseTitle').value.trim();
       const lecturer_name = document.getElementById('editCourseLecturer').value.trim();
+      const lecturer_pin = document.getElementById('editCoursePin').value.trim();
 
       if (!course_code || !course_title || !lecturer_name) {
         return showToast('Please fill all course fields before saving.', 'error');
@@ -1567,7 +1930,8 @@
           level,
           semester,
           course_title,
-          lecturer_name
+          lecturer_name,
+          lecturer_pin: lecturer_pin || null
         })
       });
       const data = await res.json();
@@ -1632,6 +1996,7 @@
       const semester = parseInt(document.getElementById('newCourseSemester').value, 10);
       const course_title = document.getElementById('newCourseTitle').value.trim();
       const lecturer_name = document.getElementById('newCourseLecturer').value.trim();
+      const lecturer_pin = document.getElementById('newCoursePin').value.trim() || '1234';
       if (!course_code || !course_title || !lecturer_name) return showToast('Fill all course fields', 'error');
 
       if (btn) {
@@ -1650,6 +2015,7 @@
             semester,
             credit_units: 3,
             lecturer_name,
+            lecturer_pin,
             lecturer_staff_id: `STF-${course_code.replace(/\s+/g, '')}`
           })
         });
@@ -1660,6 +2026,7 @@
         document.getElementById('newCourseCode').value = '';
         document.getElementById('newCourseTitle').value = '';
         document.getElementById('newCourseLecturer').value = '';
+        document.getElementById('newCoursePin').value = '1234';
         showToast(data.message, data.already_existed ? 'warn' : 'success');
         if (state.selectedSemester !== 0 && state.selectedSemester !== semester) {
           setGlobalSemester(semester);

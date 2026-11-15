@@ -236,6 +236,20 @@ def normalize_course_code(code: str) -> str:
     return re.sub(r"\s+", " ", code.strip().upper())
 
 
+def parse_assigned_lecturers(lecturer_field: str) -> List[str]:
+    """
+    Splits a course's lecturer_name field into individual assigned co-lecturers.
+    Supports formats like: 'Prof. Oyeneyin & Engr. Omoregbe', 'Prof. Oyeneyin, Engr. Omoregbe',
+    'Prof. Oyeneyin / Engr. Omoregbe', or 'Prof. Oyeneyin and Engr. Omoregbe'.
+    """
+    import re
+    if not lecturer_field:
+        return ["Course Lecturer"]
+    parts = re.split(r"\s*(?:,|&|/|;|\band\b)\s*", lecturer_field.strip(), flags=re.IGNORECASE)
+    cleaned = [p.strip() for p in parts if p and p.strip()]
+    return cleaned if cleaned else [lecturer_field.strip()]
+
+
 def deduplicate_courses_in_db(db: Session):
     """Merges any duplicate courses (like multiple PEE 571 entries) and keeps only 1 clean record."""
     all_courses = db.query(Course).order_by(Course.id.asc()).all()
@@ -330,9 +344,18 @@ def init_and_seed_db():
         # Ensure Second Semester demo courses exist for PEE so both 1st & 2nd Semester views have rich courses
         pee_dept = dept_map.get("PEE")
         if pee_dept:
+            # Update PEE 401 to feature co-teaching by Prof. Oyeneyin & Engr. Omoregbe if still on default demo name
+            pee401 = db.query(Course).filter(
+                Course.department_id == pee_dept.id,
+                Course.course_code == "PEE 401"
+            ).first()
+            if pee401 and pee401.lecturer_name == "Dr. M. O. Nwosu":
+                pee401.lecturer_name = "Prof. Oyeneyin & Engr. Omoregbe"
+                db.commit()
+
             second_sem_pee = [
                 ("PEE 302", "Reservoir Rock & Fluid Properties Lab (2nd Sem)", 300, 2, 3, "Dr. K. Ibe", "STF-PEE-07"),
-                ("PEE 402", "Natural Gas Transmission & Processing (2nd Sem)", 400, 2, 4, "Dr. M. O. Nwosu", "STF-PEE-08"),
+                ("PEE 402", "Natural Gas Transmission & Processing (2nd Sem)", 400, 2, 4, "Prof. Oyeneyin & Engr. Omoregbe", "STF-PEE-08"),
                 ("PEE 404", "Subsea & Offshore Drilling Engineering (2nd Sem)", 400, 2, 3, "Prof. E. O. Adewale", "STF-PEE-09"),
                 ("PEE 502", "Enhanced Oil Recovery & Reservoir Simulation (2nd Sem)", 500, 2, 4, "Prof. B. Tamuno", "STF-PEE-10"),
             ]
@@ -458,6 +481,8 @@ class AuthLoginRequest(BaseModel):
     pin: Optional[str] = None
     matric_no: Optional[str] = None
     level: Optional[int] = 400
+    course_id: Optional[int] = Field(default=None, description="Assigned course ID when role=='lecturer'")
+    lecturer_name: Optional[str] = Field(default=None, description="Specific co-lecturer signing in for the course")
 
 
 class DepartmentCreate(BaseModel):
@@ -494,6 +519,13 @@ class CourseUpdate(BaseModel):
     semester: int = 1
     lecturer_name: str
     credit_units: Optional[int] = 3
+    lecturer_pin: Optional[str] = None
+
+
+class CourseLecturerPinUpdate(BaseModel):
+    """Allows the assigned Course Lecturer(s) or HOD to customize the private PIN for their isolated course."""
+    new_pin: str
+    lecturer_name: Optional[str] = None
 
 
 class StudentEnrollRequest(BaseModel):
@@ -588,27 +620,51 @@ def role_portal_login(payload: AuthLoginRequest, db: Session = Depends(get_db)):
 
     elif role == "lecturer":
         if not payload.pin:
-            raise HTTPException(status_code=400, detail="Enter your Lecturer Access PIN.")
-        # Match against any course lecturer PIN in the department or default 1234
-        pin_h = hash_pin(payload.pin)
+            raise HTTPException(status_code=400, detail="Enter your Course Lecturer Access PIN.")
+        if not payload.course_id:
+            raise HTTPException(status_code=400, detail="Select your assigned course to unlock your isolated Course Lecturer workspace.")
+
         matched_course = db.query(Course).filter(
+            Course.id == payload.course_id,
             Course.department_id == dept.id,
-            Course.lecturer_pin_hash == pin_h
         ).first()
-        if not matched_course and pin_h != hash_pin("1234"):
-            raise HTTPException(status_code=401, detail="Invalid Course Lecturer PIN.")
-        actor = matched_course.lecturer_name if matched_course else f"Course Lecturer ({dept.code})"
+        if not matched_course:
+            raise HTTPException(status_code=404, detail="Selected course was not found in this department.")
+
+        pin_h = hash_pin(payload.pin)
+        if pin_h != matched_course.lecturer_pin_hash:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid Lecturer PIN for {matched_course.course_code}. Only lecturers assigned to {matched_course.course_code} can access its database."
+            )
+
+        assigned_list = parse_assigned_lecturers(matched_course.lecturer_name)
+        chosen_lecturer = (payload.lecturer_name or "").strip()
+        if not chosen_lecturer or chosen_lecturer not in assigned_list:
+            chosen_lecturer = assigned_list[0]
+
+        actor = f"{chosen_lecturer} ({matched_course.course_code})"
         token = create_access_token({
             "role": "lecturer",
             "department_id": dept.id,
             "department_code": dept.code,
+            "course_id": matched_course.id,
+            "course_code": matched_course.course_code,
+            "lecturer_name": chosen_lecturer,
             "actor_name": actor,
         })
         return {
-            "message": f"Lecturer Portal Unlocked ({dept.code})",
+            "message": f"Isolated Course Workspace Unlocked: {matched_course.course_code} — {chosen_lecturer}",
             "token": token,
             "role": "lecturer",
             "department_id": dept.id,
+            "course_id": matched_course.id,
+            "course_code": matched_course.course_code,
+            "course_title": matched_course.course_title,
+            "level": matched_course.level,
+            "semester": matched_course.semester or 1,
+            "lecturer_name": chosen_lecturer,
+            "assigned_lecturers": assigned_list,
             "actor_name": actor,
         }
 
@@ -781,6 +837,7 @@ def list_courses(
             "semester": c.semester or 1,
             "credit_units": c.credit_units,
             "lecturer_name": c.lecturer_name,
+            "assigned_lecturers": parse_assigned_lecturers(c.lecturer_name),
             "lecturer_staff_id": c.lecturer_staff_id,
             "total_sessions": total_sessions,
             "active_session_uid": active_sess.session_uid if active_sess else None,
@@ -845,7 +902,7 @@ def update_course_details(
     claims: Dict[str, Any] = Depends(verify_access_token),
     db: Session = Depends(get_db),
 ):
-    """Allows the HOD to edit the exact details inputted when adding a course (Code, Level, Semester, Title, Lecturer)."""
+    """Allows the HOD to edit the exact details inputted when adding a course (Code, Level, Semester, Title, Lecturer, PIN)."""
     if claims.get("role") != "hod":
         raise HTTPException(status_code=403, detail="Only an authenticated Department HOD can edit course details.")
     course = db.query(Course).filter(Course.id == course_id).first()
@@ -863,6 +920,8 @@ def update_course_details(
     course.lecturer_name = payload.lecturer_name.strip()
     if payload.credit_units is not None:
         course.credit_units = payload.credit_units
+    if payload.lecturer_pin and len(payload.lecturer_pin.strip()) >= 4:
+        course.lecturer_pin_hash = hash_pin(payload.lecturer_pin.strip())
 
     sessions = db.query(LectureSession).filter(LectureSession.course_id == course.id).all()
     for s in sessions:
@@ -880,7 +939,48 @@ def update_course_details(
             "level": course.level,
             "semester": course.semester,
             "lecturer_name": course.lecturer_name,
+            "assigned_lecturers": parse_assigned_lecturers(course.lecturer_name),
         }
+    }
+
+
+@router.put("/courses/{course_id}/lecturer-pin")
+@router.put("/api/courses/{course_id}/lecturer-pin")
+def update_course_lecturer_pin(
+    course_id: int,
+    payload: CourseLecturerPinUpdate,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    """
+    Allows an authenticated Course Lecturer (for their own assigned course only) or the HOD
+    to set a private Course Access PIN so no other lecturer can unlock this course.
+    """
+    role = claims.get("role")
+    if role not in ("lecturer", "hod"):
+        raise HTTPException(status_code=403, detail="Only the assigned Course Lecturer or HOD can update this course's PIN.")
+    if role == "lecturer" and claims.get("course_id") != course_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Strict Course Isolation: You can only modify the security PIN for your own assigned course."
+        )
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    if not payload.new_pin or len(payload.new_pin.strip()) < 4:
+        raise HTTPException(status_code=400, detail="New Course PIN must be at least 4 characters.")
+
+    course.lecturer_pin_hash = hash_pin(payload.new_pin.strip())
+    if payload.lecturer_name and payload.lecturer_name.strip():
+        course.lecturer_name = payload.lecturer_name.strip()
+    db.commit()
+    db.refresh(course)
+    return {
+        "message": f"Updated private Lecturer Access PIN for {course.course_code}. Only {course.lecturer_name} can unlock this course.",
+        "course_id": course.id,
+        "course_code": course.course_code,
+        "lecturer_name": course.lecturer_name,
+        "assigned_lecturers": parse_assigned_lecturers(course.lecturer_name),
     }
 
 
@@ -1016,11 +1116,25 @@ def start_lecture_session(
     claims: Dict[str, Any] = Depends(verify_access_token),
     db: Session = Depends(get_db),
 ):
-    if claims.get("role") not in ("lecturer", "hod", "courserep"):
+    role = claims.get("role")
+    if role not in ("lecturer", "hod", "courserep"):
         raise HTTPException(status_code=403, detail="Only an authenticated Course Lecturer, HOD, or Course Rep can start a session.")
+
+    # Strict Course Isolation for Lecturers: can only launch sessions for their own authenticated course
+    if role == "lecturer" and claims.get("course_id") and claims.get("course_id") != payload.course_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Strict Course Isolation: You are signed in to {claims.get('course_code')}. You cannot launch or modify sessions for another lecturer's course."
+        )
+
     course = db.query(Course).filter(Course.id == payload.course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+
+    assigned_list = parse_assigned_lecturers(course.lecturer_name)
+    requested_lecturer = (payload.started_by or claims.get("lecturer_name") or "").strip()
+    if not requested_lecturer:
+        requested_lecturer = assigned_list[0]
 
     uid = f"SESS-{course.course_code.replace(' ', '')}-W{payload.week_number}-{secrets.token_hex(3).upper()}"
     sess = LectureSession(
@@ -1031,7 +1145,7 @@ def start_lecture_session(
         semester=course.semester or 1,
         topic=payload.topic.strip(),
         week_number=payload.week_number,
-        started_by=payload.started_by.strip(),
+        started_by=requested_lecturer,
         status="ACTIVE",
         latitude=payload.latitude,
         longitude=payload.longitude,
@@ -1041,7 +1155,7 @@ def start_lecture_session(
     db.commit()
     db.refresh(sess)
     return {
-        "message": f"Live attendance session started for {course.course_code} ({'1st' if sess.semester == 1 else '2nd'} Semester)",
+        "message": f"Live session launched for {course.course_code} — Taught by {sess.started_by}",
         "session": {
             "id": sess.id,
             "session_uid": sess.session_uid,
@@ -1112,21 +1226,35 @@ def close_session(
     claims: Dict[str, Any] = Depends(verify_access_token),
     db: Session = Depends(get_db),
 ):
-    if claims.get("role") not in ("lecturer", "hod"):
+    role = claims.get("role")
+    if role not in ("lecturer", "hod"):
         raise HTTPException(status_code=403, detail="Only an authenticated Course Lecturer or HOD can lock a session.")
     sess = db.query(LectureSession).filter(LectureSession.session_uid == session_uid).first()
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    if role == "lecturer" and claims.get("course_id") and claims.get("course_id") != sess.course_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Strict Course Isolation: You cannot lock or modify a session belonging to another course."
+        )
+
     sess.status = "CLOSED"
     sess.closed_at = datetime.now(timezone.utc)
     db.commit()
-    return {"message": f"Session {session_uid} closed and locked for HOD reporting."}
+    return {"message": f"Session {session_uid} (Taught by {sess.started_by}) closed and locked for HOD reporting."}
 
 
-def _process_single_checkin(item: BiometricCheckInRequest, db: Session) -> Dict[str, Any]:
+def _process_single_checkin(item: BiometricCheckInRequest, db: Session, allowed_course_id: Optional[int] = None) -> Dict[str, Any]:
     sess = db.query(LectureSession).filter(LectureSession.session_uid == item.session_uid).first()
     if not sess:
         raise HTTPException(status_code=404, detail=f"Session {item.session_uid} not found.")
+
+    if allowed_course_id is not None and sess.course_id != allowed_course_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Strict Course Isolation: You can only record or sync attendance for your own assigned course."
+        )
 
     matric = item.matric_no.strip().upper()
     student = db.query(Student).filter(Student.matric_no == matric).first()
@@ -1173,6 +1301,8 @@ def _process_single_checkin(item: BiometricCheckInRequest, db: Session) -> Dict[
             "matric_no": student.matric_no,
             "full_name": student.full_name,
             "confidence_score": existing.confidence_score,
+            "lecturer_on_duty": sess.started_by,
+            "session_uid": sess.session_uid,
         }
 
     rec = AttendanceRecord(
@@ -1194,6 +1324,8 @@ def _process_single_checkin(item: BiometricCheckInRequest, db: Session) -> Dict[
         "verification_method": item.verification_method,
         "confidence_score": confidence,
         "captured_offline": item.captured_offline,
+        "lecturer_on_duty": sess.started_by,
+        "session_uid": sess.session_uid,
     }
 
 
@@ -1209,8 +1341,12 @@ def check_in_student(
             status_code=403,
             detail="Anti-Impersonation Block: You can only check in with your own authenticated Student Profile!"
         )
-    result = _process_single_checkin(payload, db)
-    return {"message": f"Biometric attendance verified for {result['full_name']}", "record": result}
+    allowed_cid = claims.get("course_id") if claims.get("role") == "lecturer" else None
+    result = _process_single_checkin(payload, db, allowed_course_id=allowed_cid)
+    return {
+        "message": f"Biometric attendance verified for {result['full_name']} (Class taught by {result.get('lecturer_on_duty', 'Lecturer')})",
+        "record": result
+    }
 
 
 @router.post("/attendance/sync-offline")
@@ -1222,12 +1358,13 @@ def sync_offline_attendance(
 ):
     if claims.get("role") not in ("courserep", "lecturer", "hod"):
         raise HTTPException(status_code=403, detail="Only an authenticated Course Rep, Lecturer, or HOD can sync offline logs.")
+    allowed_cid = claims.get("course_id") if claims.get("role") == "lecturer" else None
     synced = []
     errors = []
     for item in payload.records:
         try:
             item.captured_offline = True
-            res = _process_single_checkin(item, db)
+            res = _process_single_checkin(item, db, allowed_course_id=allowed_cid)
             synced.append(res)
         except HTTPException as he:
             errors.append({"matric_no": item.matric_no, "error": he.detail})
@@ -1269,7 +1406,32 @@ def hod_exam_eligibility_report(
     total_barred_instances = 0
 
     for c in courses:
-        total_sessions = db.query(LectureSession).filter(LectureSession.course_id == c.id).count()
+        course_sessions = db.query(LectureSession).filter(LectureSession.course_id == c.id).order_by(LectureSession.week_number.asc(), LectureSession.id.asc()).all()
+        total_sessions = len(course_sessions)
+        assigned_list = parse_assigned_lecturers(c.lecturer_name)
+
+        # Build Co-Lecturer Attribution Breakdown (who taught which class and how many sessions)
+        lect_stats_map: Dict[str, Dict[str, Any]] = {
+            ln: {"lecturer_name": ln, "sessions_taught": 0, "weeks": []} for ln in assigned_list
+        }
+        sessions_summary = []
+        for s in course_sessions:
+            teacher = (s.started_by or assigned_list[0]).strip()
+            if teacher not in lect_stats_map:
+                lect_stats_map[teacher] = {"lecturer_name": teacher, "sessions_taught": 0, "weeks": []}
+            lect_stats_map[teacher]["sessions_taught"] += 1
+            lect_stats_map[teacher]["weeks"].append(s.week_number)
+            present_cnt = db.query(AttendanceRecord).filter(AttendanceRecord.session_id == s.id).count()
+            sessions_summary.append({
+                "session_uid": s.session_uid,
+                "week_number": s.week_number,
+                "topic": s.topic,
+                "taught_by": teacher,
+                "status": s.status,
+                "present_count": present_cnt,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            })
+
         students = db.query(Student).filter(
             Student.department_id == department_id,
             Student.level == c.level
@@ -1321,6 +1483,9 @@ def hod_exam_eligibility_report(
             "semester": c.semester or 1,
             "credit_units": c.credit_units,
             "lecturer_name": c.lecturer_name,
+            "assigned_lecturers": assigned_list,
+            "lecturer_breakdown": list(lect_stats_map.values()),
+            "sessions_log": sessions_summary,
             "total_sessions_held": total_sessions,
             "total_students": len(students),
             "eligible_count": eligible_count,
