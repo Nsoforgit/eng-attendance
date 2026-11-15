@@ -50,7 +50,7 @@
 </head>
 <body class="min-h-screen font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
 
-  <!-- TOP HEADER & LIVE NETWORK / OFFLINE SYNC BAR -->
+  <!-- TOP HEADER & LIVE NETWORK / SEMESTER / LEVEL BAR -->
   <header class="sticky top-0 z-50 glass border-b border-slate-800/80 no-print">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
@@ -66,9 +66,9 @@
         </div>
       </div>
 
-      <!-- Network & Offline Sync Controls -->
-      <div class="flex items-center gap-2.5 flex-wrap">
-        <!-- Department Selector (All 13 Engineering Depts) -->
+      <!-- Global Controls: Department, Semester (1st/2nd), Level (300L-500L), Network -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Department Selector -->
         <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg px-2.5 py-1.5">
           <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Dept:</span>
           <select id="globalDeptSelect" onchange="onGlobalFilterChange()" class="bg-slate-900 text-xs font-semibold text-white focus:outline-none cursor-pointer">
@@ -76,43 +76,57 @@
           </select>
         </div>
 
+        <!-- Semester Switcher (1st Sem / 2nd Sem / All) -->
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5 text-xs font-mono" title="Filter by Academic Semester">
+          <button onclick="setGlobalSemester(1)" id="semBtn-1" class="px-2.5 py-1 rounded-md transition bg-teal-500 text-slate-950 font-bold">1st Sem</button>
+          <button onclick="setGlobalSemester(2)" id="semBtn-2" class="px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white">2nd Sem</button>
+          <button onclick="setGlobalSemester(0)" id="semBtn-0" class="px-2 py-1 rounded-md transition text-slate-300 hover:text-white">Both</button>
+        </div>
+
         <!-- Level Filter (300L, 400L, 500L) -->
         <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5 text-xs font-mono">
-          <button onclick="setGlobalLevel(300)" id="lvlBtn-300" class="px-2.5 py-1 rounded-md transition">300L</button>
+          <button onclick="setGlobalLevel(300)" id="lvlBtn-300" class="px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white">300L</button>
           <button onclick="setGlobalLevel(400)" id="lvlBtn-400" class="px-2.5 py-1 rounded-md transition bg-emerald-500 text-slate-950 font-bold">400L</button>
-          <button onclick="setGlobalLevel(500)" id="lvlBtn-500" class="px-2.5 py-1 rounded-md transition">500L</button>
-          <button onclick="setGlobalLevel(0)" id="lvlBtn-0" class="px-2.5 py-1 rounded-md transition">ALL</button>
+          <button onclick="setGlobalLevel(500)" id="lvlBtn-500" class="px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white">500L</button>
+          <button onclick="setGlobalLevel(0)" id="lvlBtn-0" class="px-2 py-1 rounded-md transition text-slate-300 hover:text-white">ALL</button>
         </div>
 
         <!-- Online/Offline Toggle & Pending Sync Queue -->
         <button onclick="toggleSimulatedOffline()" id="networkBadgeBtn" title="Click to test Lecture Hall Offline Mode" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
           <span id="networkDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          <span id="networkStatusText">Online (Auto-Sync)</span>
+          <span id="networkStatusText">Online</span>
         </button>
 
         <button onclick="syncOfflineQueueNow()" id="syncQueueBtn" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 transition shadow-lg shadow-amber-500/20">
-          <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
           <span>Sync <span id="offlineCountBadge">0</span> Queued</span>
         </button>
       </div>
     </div>
 
-    <!-- ROLE NAVIGATION TABS -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 border-t border-slate-800/60 bg-slate-950/60">
+    <!-- ROLE NAVIGATION TABS WITH SECURITY LOCK INDICATORS -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 border-t border-slate-800/60 bg-slate-950/60 flex items-center justify-between gap-2 flex-wrap">
       <nav class="flex items-center gap-1 overflow-x-auto py-1.5 text-xs sm:text-sm font-medium">
-        <button onclick="switchRoleTab('hod')" id="tab-hod" class="role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
-          <span>🏛️</span> 1. Department HOD (70% Exam Matrix & Course Mgmt)
+        <button onclick="switchRoleTab('hod')" id="tab-hod" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+          <span id="lockIcon-hod">🔒</span> 1. Department HOD
         </button>
-        <button onclick="switchRoleTab('lecturer')" id="tab-lecturer" class="role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
-          <span>👨‍🏫</span> 2. Course Lecturer (Sessions & Course Logs)
+        <button onclick="switchRoleTab('lecturer')" id="tab-lecturer" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+          <span id="lockIcon-lecturer">🔒</span> 2. Course Lecturer
         </button>
-        <button onclick="switchRoleTab('courserep')" id="tab-courserep" class="role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
-          <span>📱</span> 3. Level Course Rep (Biometric Enrollment & Offline Kiosk)
+        <button onclick="switchRoleTab('courserep')" id="tab-courserep" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+          <span id="lockIcon-courserep">🔒</span> 3. Level Course Rep
         </button>
-        <button onclick="switchRoleTab('student')" id="tab-student" class="role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
-          <span>🎓</span> 4. Student Portal (Passkey Check-In & Live %)
+        <button onclick="switchRoleTab('student')" id="tab-student" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+          <span id="lockIcon-student">🔒</span> 4. Student Profile Portal
         </button>
       </nav>
+
+      <!-- Active Security Session Status Pill -->
+      <div id="activeAuthBar" class="flex items-center gap-2 py-1 text-xs font-mono">
+        <span id="activeAuthLabel" class="text-amber-400">🔒 Portal Locked</span>
+        <button onclick="lockCurrentPortal()" id="logoutRoleBtn" class="hidden px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] transition">
+          Lock Portal
+        </button>
+      </div>
     </div>
   </header>
 
@@ -123,24 +137,70 @@
   <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
     <!-- ======================================================================= -->
+    <!-- ROLE SECURITY GATE (SHOWN WHEN ACTIVE PORTAL TAB IS NOT UNLOCKED)       -->
+    <!-- ======================================================================= -->
+    <section id="securityGateCard" class="glass rounded-2xl p-6 sm:p-8 border border-emerald-500/30 max-w-lg mx-auto my-6 space-y-5 shadow-2xl">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-2xl">
+          🔐
+        </div>
+        <div>
+          <span id="gateRoleBadge" class="text-[11px] font-mono uppercase text-emerald-400">Protected Role Session</span>
+          <h2 id="gateTitle" class="font-display text-xl font-bold text-white">Unlock Department HOD Portal</h2>
+          <p id="gateSubtitle" class="text-xs text-slate-400">Prevent unauthorized changes: verify your credentials to access this portal.</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div id="gatePinGroup">
+          <label id="gatePinLabel" class="block text-xs text-slate-300 font-medium mb-1">Security Access PIN</label>
+          <input type="password" id="gatePinInput" placeholder="Enter 4-digit PIN (Default Demo PIN: 1234)" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
+          <p class="text-[11px] text-slate-400 mt-1">Default PIN for testing is <code class="text-emerald-400 font-mono">1234</code> (HOD can customize their name & PIN inside the dashboard).</p>
+        </div>
+
+        <div id="gateStudentGroup" class="hidden">
+          <label class="block text-xs text-slate-300 font-medium mb-1">Your Matriculation Number</label>
+          <input type="text" id="gateMatricInput" value="ENG/123/4567" placeholder="e.g. ENG/123/4567, UB6474386, B1222329, PG2307676" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white uppercase" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
+          <div class="flex items-center gap-1.5 flex-wrap text-[11px] pt-2">
+            <span class="text-slate-500">Quick Fill:</span>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='ENG/123/4567'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">ENG/123/4567</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='UB6474386'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">UB6474386</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='B1222329'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">B1222329</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='PG2307676'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">PG2307676</button>
+          </div>
+        </div>
+
+        <button onclick="submitPortalLogin()" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+          🔓 Verify & Unlock Portal Session
+        </button>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
     <!-- TAB 1: DEPARTMENT HOD COMMAND CENTER & 70% EXAM ELIGIBILITY PORTAL      -->
     <!-- ======================================================================= -->
-    <section id="panel-hod" class="space-y-6">
+    <section id="panel-hod" class="hidden space-y-6">
       <!-- Top HOD Banner & Quick Actions -->
       <div class="glass rounded-2xl p-5 sm:p-6 border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 text-emerald-400 text-xs font-mono uppercase tracking-wider mb-1">
             <span>HOD Command Center • NUC / COREN 70% Attendance Enforcement</span>
+            <span id="hodSemesterPill" class="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30">First Semester</span>
           </div>
           <h2 id="hodDeptHeading" class="font-display text-2xl sm:text-3xl font-bold text-white">Department of Petroleum Engineering (PEE)</h2>
-          <p id="hodNameSub" class="text-sm text-slate-400 mt-0.5">Head of Department: Prof. E. O. Adewale • Scope: 300L, 400L & 500L Core Departmental Courses Only</p>
+          <div class="flex items-center gap-2 flex-wrap mt-1">
+            <p id="hodNameSub" class="text-sm text-slate-300">Head of Department: Prof. E. O. Adewale</p>
+            <button onclick="openEditHodProfileModal()" class="no-print px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition">
+              ⚙️ Edit HOD Name & PIN
+            </button>
+          </div>
         </div>
         <div class="flex flex-wrap items-center gap-2.5 no-print">
           <button onclick="openModal('deptModal')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition">
             + Register Engineering Dept
           </button>
           <button onclick="openAddCourseModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition">
-            + Add 300L/400L/500L Course
+            + Add 1st/2nd Sem Course
           </button>
           <button onclick="exportHodCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition">
             ⬇ Export Exam Eligibility CSV
@@ -156,7 +216,7 @@
         <div class="glass rounded-xl p-4 border border-slate-800">
           <p class="text-xs text-slate-400 uppercase font-mono">Departmental Courses</p>
           <p id="kpiCoursesCount" class="font-display text-3xl font-bold text-white mt-1">0</p>
-          <p class="text-[11px] text-slate-500 mt-1">300L, 400L & 500L Core Courses</p>
+          <p id="kpiSemesterSub" class="text-[11px] text-slate-500 mt-1">300L, 400L & 500L Core Courses</p>
         </div>
         <div class="glass rounded-xl p-4 border border-slate-800">
           <p class="text-xs text-slate-400 uppercase font-mono">Minimum Exam Threshold</p>
@@ -180,7 +240,7 @@
         <div class="flex items-center gap-3 flex-wrap">
           <label class="text-xs text-slate-400 font-medium">Filter Course:</label>
           <select id="hodCourseSelect" onchange="loadHodEligibility()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none">
-            <option value="">All Courses in Selected Level</option>
+            <option value="">All Courses in Selected Level & Semester</option>
           </select>
 
           <label class="text-xs text-slate-400 font-medium ml-2">Status Filter:</label>
@@ -210,10 +270,10 @@
         <div class="glass rounded-2xl p-5 border border-slate-800 space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="font-display text-lg font-bold text-white">Start Class Attendance Session</h3>
-            <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-emerald-500/20 text-emerald-400">Lecturer / Rep</span>
+            <span id="lecturerSemBadge" class="px-2 py-0.5 text-[11px] font-mono rounded bg-teal-500/20 text-teal-300">1st Semester</span>
           </div>
           <p class="text-xs text-slate-400">
-            Initiate a time-bound biometric session for a 300L, 400L, or 500L departmental course. Once started, students can verify via the Samsung Camera Face Kiosk or Device Passkey.
+            Initiate a time-bound biometric session for a 300L, 400L, or 500L departmental course in the selected semester.
           </p>
 
           <div class="space-y-3">
@@ -246,7 +306,7 @@
           <div class="flex items-center justify-between">
             <div>
               <h3 class="font-display text-lg font-bold text-white">Departmental Lecture Sessions Log</h3>
-              <p class="text-xs text-slate-400">Click "Open Kiosk" on any active session to take student biometrics on the Samsung phone.</p>
+              <p class="text-xs text-slate-400">Filtered by selected Semester & Level. Click "Open Kiosk" on any active session to verify student biometrics.</p>
             </div>
             <button onclick="loadSessionsList()" class="text-xs text-emerald-400 hover:underline">↻ Refresh</button>
           </div>
@@ -318,7 +378,6 @@
               </button>
             </div>
 
-            <!-- HUD Overlay during active scan -->
             <div class="scan-line pointer-events-none"></div>
             <div class="absolute top-3 left-3 px-2.5 py-1 rounded bg-slate-950/80 border border-slate-700 text-[11px] font-mono text-emerald-400">
               ANTI-SPOOFING: ACTIVE
@@ -398,26 +457,19 @@
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <!-- Student Live 70% Status Lookup -->
         <div class="lg:col-span-7 glass rounded-2xl p-5 border border-slate-800 space-y-4">
-          <h3 class="font-display text-lg font-bold text-white">Check My 70% Exam Eligibility Status</h3>
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h3 class="font-display text-lg font-bold text-white">My 70% Exam Eligibility Status</h3>
+            <span id="studentSemBadge" class="px-2.5 py-0.5 rounded-full text-xs font-mono bg-teal-500/20 text-teal-300 border border-teal-500/30">First Semester</span>
+          </div>
           <p class="text-xs text-slate-400">
-            Enter your Matric Number (supports <code class="text-emerald-300">ENG/123/4567</code>, <code class="text-emerald-300">UB6474386</code>, <code class="text-emerald-300">B1222329</code>, <code class="text-emerald-300">PG2307676</code>, etc.) to see your real-time attendance percentage across your 300L, 400L, or 500L departmental courses.
+            Authenticated Student Profile session. Your attendance percentage across your 1st and 2nd Semester departmental courses is shown below:
           </p>
 
           <div class="flex flex-wrap gap-2">
-            <input type="text" id="studentLookupInput" value="ENG/220/4001" placeholder="Enter Matric No (e.g. ENG/123/4567 or UB6474386)" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm font-mono text-white uppercase" />
-            <button onclick="lookupStudentDashboard()" class="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
-              Check My Status
+            <input type="text" id="studentLookupInput" value="ENG/123/4567" readonly class="flex-1 bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 text-sm font-mono text-emerald-300 uppercase" />
+            <button onclick="lockCurrentPortal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition">
+              Switch Student Account
             </button>
-          </div>
-
-          <div class="flex items-center gap-2 flex-wrap text-xs">
-            <span class="text-slate-500">Quick Demo Formats:</span>
-            <button onclick="quickLookup('ENG/123/4567')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 font-mono">ENG/123/4567 (100% Safe)</button>
-            <button onclick="quickLookup('UB6474386')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 font-mono">UB6474386 (80% Safe)</button>
-            <button onclick="quickLookup('B1222329')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 font-mono">B1222329 (80% Safe)</button>
-            <button onclick="quickLookup('PG2307676')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 font-mono">PG2307676 (80% Safe)</button>
-            <button onclick="quickLookup('UB6474390')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 font-mono">UB6474390 (60% Barred)</button>
-            <button onclick="quickLookup('B1222388')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-rose-300 font-mono">B1222388 (40% Barred)</button>
           </div>
 
           <div id="studentPersonalResult" class="space-y-3 pt-2"></div>
@@ -430,7 +482,7 @@
             <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-teal-500/20 text-teal-300">WebAuthn</span>
           </div>
           <p class="text-xs text-slate-400">
-            If your phone is registered with a hardware Passkey (Samsung Ultrasonic Fingerprint / FaceID), you can verify your attendance for an active lecture session directly from your seat.
+            Locked to your signed-in Matric Number so no student can check in for a friend. Verify your fingerprint passkey for an active class session below:
           </p>
 
           <div class="space-y-3">
@@ -439,8 +491,8 @@
               <select id="studentSelfSessionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"></select>
             </div>
             <div>
-              <label class="block text-xs text-slate-400 mb-1">Your Matric Number</label>
-              <input type="text" id="studentSelfMatric" value="UB6474390" placeholder="ENG/123/4567, UB6474386, B1222329..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white uppercase" />
+              <label class="block text-xs text-slate-400 mb-1">Authenticated Matric Number (Locked)</label>
+              <input type="text" id="studentSelfMatric" value="ENG/123/4567" readonly class="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-400 uppercase" />
             </div>
 
             <button onclick="studentPasskeyCheckIn()" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20">
@@ -453,6 +505,37 @@
 
   </main>
 
+  <!-- MODAL: EDIT HOD PROFILE & SECURITY PIN -->
+  <div id="editHodModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-emerald-500/40 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-mono uppercase text-emerald-400">Department HOD Security</span>
+          <h3 class="font-display text-lg font-bold text-white">Customize HOD Name & Security PIN</h3>
+        </div>
+        <button onclick="closeModal('editHodModal')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">Replace the default/demo HOD name for this department and optionally set a new HOD Security PIN.</p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Official Head of Department (HOD) Name</label>
+          <input type="text" id="editHodNameInput" placeholder="e.g. Prof. E. O. Adewale" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Official HOD Institutional Email</label>
+          <input type="email" id="editHodEmailInput" placeholder="e.g. hod.pee@eng.uniben.edu" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">New HOD Security PIN (Leave blank to keep current PIN)</label>
+          <input type="password" id="editHodPinInput" placeholder="Enter new 4+ digit PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+        </div>
+        <button onclick="submitEditHodProfile()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
+          💾 Save HOD Profile & PIN
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: REGISTER NEW ENGINEERING DEPARTMENT -->
   <div id="deptModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="glass rounded-2xl max-w-md w-full p-6 border border-slate-700 space-y-4">
@@ -460,7 +543,6 @@
         <h3 class="font-display text-lg font-bold text-white">Register Engineering Department</h3>
         <button onclick="closeModal('deptModal')" class="text-slate-400 hover:text-white">✕</button>
       </div>
-      <p class="text-xs text-slate-400">All 13 standard Engineering departments (CHE, CVE, CPE, EEE, MEE, PEE, PRE, STE, AGE, MME, MCE, INE, MRE) are already pre-registered. Use this to add any additional specialty department.</p>
       <div class="space-y-3">
         <div>
           <label class="block text-xs text-slate-400 mb-1">Department Short Code (3 Letters)</label>
@@ -474,6 +556,10 @@
           <label class="block text-xs text-slate-400 mb-1">Head of Department (HOD) Name</label>
           <input type="text" id="newDeptHod" placeholder="e.g. Prof. S. A. Lawal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">HOD Security PIN for this Department</label>
+          <input type="password" id="newDeptPin" value="1234" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+        </div>
         <button onclick="submitNewDepartment()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
           Save Department to Registry
         </button>
@@ -481,7 +567,7 @@
     </div>
   </div>
 
-  <!-- MODAL: ADD NEW 300L/400L/500L DEPARTMENTAL COURSE -->
+  <!-- MODAL: ADD NEW 300L/400L/500L DEPARTMENTAL COURSE (WITH SEMESTER) -->
   <div id="courseModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="glass rounded-2xl max-w-md w-full p-6 border border-slate-700 space-y-4">
       <div class="flex items-center justify-between">
@@ -489,17 +575,24 @@
         <button onclick="closeModal('courseModal')" class="text-slate-400 hover:text-white">✕</button>
       </div>
       <div class="space-y-3">
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-3 gap-2">
           <div>
             <label class="block text-xs text-slate-400 mb-1">Course Code</label>
-            <input type="text" id="newCourseCode" placeholder="e.g. PEE 407" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white uppercase" />
+            <input type="text" id="newCourseCode" placeholder="e.g. PEE 405" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white uppercase" />
           </div>
           <div>
-            <label class="block text-xs text-slate-400 mb-1">Level (Core Only)</label>
-            <select id="newCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono">
+            <label class="block text-xs text-slate-400 mb-1">Level</label>
+            <select id="newCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
               <option value="300">300 Level</option>
               <option value="400" selected>400 Level</option>
               <option value="500">500 Level</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-teal-300 font-semibold mb-1">Semester *</label>
+            <select id="newCourseSemester" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-2.5 py-2 text-xs text-white font-mono">
+              <option value="1">1st Semester</option>
+              <option value="2">2nd Semester</option>
             </select>
           </div>
         </div>
@@ -518,30 +611,37 @@
     </div>
   </div>
 
-  <!-- MODAL: HOD EDIT EXISTING COURSE DETAILS -->
+  <!-- MODAL: HOD EDIT EXISTING COURSE DETAILS (WITH SEMESTER & DELETE) -->
   <div id="editCourseModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="glass rounded-2xl max-w-md w-full p-6 border border-emerald-500/40 space-y-4">
       <div class="flex items-center justify-between">
         <div>
           <span class="text-[11px] font-mono uppercase text-emerald-400">HOD Course Management</span>
-          <h3 class="font-display text-lg font-bold text-white">Edit Course Details</h3>
+          <h3 class="font-display text-lg font-bold text-white">Edit or Remove Course</h3>
         </div>
         <button onclick="closeModal('editCourseModal')" class="text-slate-400 hover:text-white">✕</button>
       </div>
       <p class="text-xs text-slate-400">Edit the course details that were inputted when adding this course:</p>
       <input type="hidden" id="editCourseId" />
       <div class="space-y-3">
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-3 gap-2">
           <div>
             <label class="block text-xs text-slate-400 mb-1">Course Code</label>
-            <input type="text" id="editCourseCode" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white uppercase" />
+            <input type="text" id="editCourseCode" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white uppercase" />
           </div>
           <div>
-            <label class="block text-xs text-slate-400 mb-1">Level (Core Only)</label>
-            <select id="editCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono">
+            <label class="block text-xs text-slate-400 mb-1">Level</label>
+            <select id="editCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
               <option value="300">300 Level</option>
               <option value="400">400 Level</option>
               <option value="500">500 Level</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-teal-300 font-semibold mb-1">Semester</label>
+            <select id="editCourseSemester" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-2.5 py-2 text-xs text-white font-mono">
+              <option value="1">1st Semester</option>
+              <option value="2">2nd Semester</option>
             </select>
           </div>
         </div>
@@ -553,21 +653,28 @@
           <label class="block text-xs text-slate-400 mb-1">Course Lecturer Name</label>
           <input type="text" id="editCourseLecturer" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
-        <button onclick="submitEditCourse()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
-          💾 Save Updated Course Details
-        </button>
+        <div class="flex items-center gap-2 pt-1">
+          <button onclick="submitEditCourse()" class="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+            💾 Save Changes
+          </button>
+          <button onclick="deleteCurrentEditingCourse()" class="px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs transition">
+            🗑️ Delete Course
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
     // =========================================================================
-    // STATE & OFFLINE-FIRST STORAGE ENGINE
+    // STATE, SECURITY TOKENS & OFFLINE-FIRST STORAGE ENGINE
     // =========================================================================
     let state = {
+      activeTab: 'hod',
       departments: [],
       selectedDeptId: 1,
-      selectedLevel: 400, // Default to 400L; supports 300, 400, 500, or 0 (ALL)
+      selectedLevel: 400,    // 300, 400, 500, or 0 (ALL)
+      selectedSemester: 1,   // 1 = First Semester, 2 = Second Semester, 0 = Both
       courses: [],
       students: [],
       sessions: [],
@@ -575,10 +682,30 @@
       simulatedOffline: false,
       offlineQueue: JSON.parse(localStorage.getItem('eng_offline_attendance_queue') || '[]'),
       cachedTemplates: JSON.parse(localStorage.getItem('eng_cached_biometric_templates') || '{}'),
+      roleSessions: JSON.parse(sessionStorage.getItem('eng_role_sessions_v1') || '{}'),
     };
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    function getActiveRoleSession(role) {
+      const sess = state.roleSessions[role];
+      if (!sess) return null;
+      // For HOD/Lecturer/CourseRep, verify the token belongs to the selected department
+      if (role !== 'student' && sess.department_id !== state.selectedDeptId) {
+        return null;
+      }
+      return sess;
+    }
+
+    function authHeaders(role) {
+      const sess = getActiveRoleSession(role) || getActiveRoleSession('hod');
+      const headers = { 'Content-Type': 'application/json' };
+      if (sess && sess.token) {
+        headers['Authorization'] = `Bearer ${sess.token}`;
+      }
+      return headers;
     }
 
     function showToast(msg, type = 'success') {
@@ -637,34 +764,166 @@
       } else {
         syncBtn.classList.add('hidden');
         syncBtn.classList.remove('flex');
-        queueList.innerHTML = 'No offline records waiting. Toggle "Online (Auto-Sync)" in top bar to test offline lecture hall capture!';
+        queueList.innerHTML = 'No offline records waiting. Toggle "Online" in top bar to test offline lecture hall capture!';
       }
 
       if (isOfflineMode()) {
         btn.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-amber-500/15 border-amber-500/40 text-amber-300';
         dot.className = 'w-2 h-2 rounded-full bg-amber-400';
-        txt.textContent = 'Offline Mode (Local Queue Active)';
+        txt.textContent = 'Offline Mode';
       } else {
         btn.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
         dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
-        txt.textContent = 'Online (Auto-Sync)';
+        txt.textContent = 'Online';
       }
     }
 
     // =========================================================================
-    // ROLE NAVIGATION & GLOBAL FILTERS
+    // ROLE PORTAL SECURITY & AUTHENTICATION GATE
+    // =========================================================================
+    function renderSecurityState() {
+      const role = state.activeTab;
+      const sess = getActiveRoleSession(role);
+      const currDept = state.departments.find(d => d.id === state.selectedDeptId);
+      const deptLabel = currDept ? `${currDept.name} (${currDept.code})` : 'Engineering';
+
+      // Update lock icons on all 4 tabs
+      ['hod', 'lecturer', 'courserep', 'student'].forEach(r => {
+        const iconEl = document.getElementById(`lockIcon-${r}`);
+        if (iconEl) iconEl.textContent = getActiveRoleSession(r) ? '🔓' : '🔒';
+      });
+
+      const gateCard = document.getElementById('securityGateCard');
+      const authLabel = document.getElementById('activeAuthLabel');
+      const logoutBtn = document.getElementById('logoutRoleBtn');
+
+      if (sess) {
+        gateCard.classList.add('hidden');
+        ['hod', 'lecturer', 'courserep', 'student'].forEach(t => {
+          document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== role);
+        });
+        authLabel.innerHTML = `🔓 Signed in: <b class="text-emerald-400">${sess.actor_name}</b>`;
+        logoutBtn.classList.remove('hidden');
+
+        if (role === 'student') {
+          document.getElementById('studentLookupInput').value = sess.matric_no;
+          document.getElementById('studentSelfMatric').value = sess.matric_no;
+          lookupStudentDashboard();
+        }
+      } else {
+        // Hide all panels and display the Role Security Gate
+        ['hod', 'lecturer', 'courserep', 'student'].forEach(t => {
+          document.getElementById(`panel-${t}`).classList.add('hidden');
+        });
+        gateCard.classList.remove('hidden');
+        authLabel.innerHTML = `<span class="text-amber-400">🔒 Portal Locked</span>`;
+        logoutBtn.classList.add('hidden');
+
+        const pinGroup = document.getElementById('gatePinGroup');
+        const studentGroup = document.getElementById('gateStudentGroup');
+        const title = document.getElementById('gateTitle');
+        const sub = document.getElementById('gateSubtitle');
+        const badge = document.getElementById('gateRoleBadge');
+        const pinLabel = document.getElementById('gatePinLabel');
+
+        if (role === 'hod') {
+          badge.textContent = `HOD Security Layer • ${deptLabel}`;
+          title.textContent = `Unlock Department HOD Dashboard`;
+          sub.textContent = `Only the Head of Department for ${deptLabel} can add/edit/delete courses or modify HOD settings.`;
+          pinLabel.textContent = `Department HOD Security PIN`;
+          pinGroup.classList.remove('hidden');
+          studentGroup.classList.add('hidden');
+        } else if (role === 'lecturer') {
+          badge.textContent = `Course Lecturer Security Layer • ${deptLabel}`;
+          title.textContent = `Unlock Course Lecturer Portal`;
+          sub.textContent = `Verify your Lecturer PIN to launch or lock 1st & 2nd Semester class attendance sessions.`;
+          pinLabel.textContent = `Course Lecturer Staff PIN`;
+          pinGroup.classList.remove('hidden');
+          studentGroup.classList.add('hidden');
+        } else if (role === 'courserep') {
+          badge.textContent = `Level Course Rep Security Layer • ${deptLabel}`;
+          title.textContent = `Unlock Level Course Rep Kiosk`;
+          sub.textContent = `Authorized 300L, 400L & 500L Course Reps only: verify PIN to enroll student biometrics or run the classroom scanner.`;
+          pinLabel.textContent = `Level Course Rep Authorization PIN`;
+          pinGroup.classList.remove('hidden');
+          studentGroup.classList.add('hidden');
+        } else if (role === 'student') {
+          badge.textContent = `Student Profile Security Layer`;
+          title.textContent = `Sign In to Student Profile Portal`;
+          sub.textContent = `Enter your enrolled Matriculation Number to view your personal 70% exam eligibility and verify your phone Passkey.`;
+          pinGroup.classList.add('hidden');
+          studentGroup.classList.remove('hidden');
+        }
+      }
+    }
+
+    async function submitPortalLogin() {
+      const role = state.activeTab;
+      const pin = document.getElementById('gatePinInput').value.trim();
+      const matric_no = document.getElementById('gateMatricInput').value.trim().toUpperCase();
+
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role,
+          department_id: state.selectedDeptId,
+          pin: role !== 'student' ? pin : undefined,
+          matric_no: role === 'student' ? matric_no : undefined,
+          level: state.selectedLevel || 400
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return showToast(data.detail || 'Authentication failed', 'error');
+      }
+
+      state.roleSessions[role] = data;
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+      document.getElementById('gatePinInput').value = '';
+      showToast(data.message, 'success');
+      renderSecurityState();
+    }
+
+    function lockCurrentPortal() {
+      delete state.roleSessions[state.activeTab];
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+      showToast('Portal session locked.', 'warn');
+      renderSecurityState();
+    }
+
+    // =========================================================================
+    // ROLE NAVIGATION, SEMESTER & LEVEL FILTERS
     // =========================================================================
     function switchRoleTab(tab) {
+      state.activeTab = tab;
       ['hod', 'lecturer', 'courserep', 'student'].forEach(t => {
-        document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
         const btn = document.getElementById(`tab-${t}`);
         if (t === tab) {
-          btn.className = 'role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
+          btn.className = 'role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
         } else {
-          btn.className = 'role-tab px-4 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white';
+          btn.className = 'role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white';
         }
       });
-      if (tab === 'student') lookupStudentDashboard();
+      renderSecurityState();
+    }
+
+    function setGlobalSemester(sem) {
+      state.selectedSemester = sem;
+      [1, 2, 0].forEach(s => {
+        const b = document.getElementById(`semBtn-${s}`);
+        if (s === sem) {
+          b.className = 'px-2.5 py-1 rounded-md transition bg-teal-500 text-slate-950 font-bold';
+        } else {
+          b.className = 'px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white';
+        }
+      });
+      const semText = sem === 1 ? 'First Semester' : (sem === 2 ? 'Second Semester' : '1st & 2nd Semesters');
+      document.getElementById('hodSemesterPill').textContent = semText;
+      document.getElementById('lecturerSemBadge').textContent = semText;
+      document.getElementById('studentSemBadge').textContent = semText;
+      document.getElementById('hodCourseSelect').value = '';
+      refreshAllData();
     }
 
     function setGlobalLevel(lvl) {
@@ -684,6 +943,7 @@
       const sel = document.getElementById('globalDeptSelect');
       state.selectedDeptId = parseInt(sel.value, 10) || 1;
       document.getElementById('hodCourseSelect').value = '';
+      renderSecurityState();
       refreshAllData();
     }
 
@@ -699,7 +959,7 @@
       const health = await healthRes.json();
       const dbBadge = document.getElementById('dbEngineBadge');
       if (dbBadge && health.database_engine) {
-        dbBadge.innerHTML = `🗄️ Storage: <b>${health.database_engine}</b> • Click <b>"✏️ Edit Course Details"</b> below to edit any course`;
+        dbBadge.innerHTML = `🗄️ Storage: <b>${health.database_engine}</b>`;
       }
       const sel = document.getElementById('globalDeptSelect');
       sel.innerHTML = state.departments.map(d =>
@@ -710,10 +970,11 @@
     async function refreshAllData() {
       try {
         const lvlParam = state.selectedLevel ? `&level=${state.selectedLevel}` : '';
+        const semParam = state.selectedSemester ? `&semester=${state.selectedSemester}` : '';
         const [coursesRes, studentsRes, sessionsRes] = await Promise.all([
-          fetch(`/api/courses?department_id=${state.selectedDeptId}${lvlParam}`),
+          fetch(`/api/courses?department_id=${state.selectedDeptId}${lvlParam}${semParam}`),
           fetch(`/api/students?department_id=${state.selectedDeptId}${lvlParam}&include_templates=true`),
-          fetch(`/api/sessions?department_id=${state.selectedDeptId}${lvlParam}`)
+          fetch(`/api/sessions?department_id=${state.selectedDeptId}${lvlParam}${semParam}`)
         ]);
         state.courses = await coursesRes.json();
         state.students = await studentsRes.json();
@@ -729,21 +990,25 @@
         populateDropdowns();
         await loadHodEligibility();
         renderSessionsList();
+        if (state.activeTab === 'student' && getActiveRoleSession('student')) {
+          lookupStudentDashboard();
+        }
       } catch (err) {
         console.warn('Working from cached offline state:', err);
       }
     }
 
     function populateDropdowns() {
+      const semLabel = state.selectedSemester === 1 ? '1st Sem' : (state.selectedSemester === 2 ? '2nd Sem' : '1st & 2nd Sem');
       const hodCourseSel = document.getElementById('hodCourseSelect');
       const prevCourse = hodCourseSel.value;
-      hodCourseSel.innerHTML = `<option value="">All ${state.selectedLevel ? state.selectedLevel + 'L' : '300L–500L'} Departmental Courses</option>` +
-        state.courses.map(c => `<option value="${c.id}">${c.course_code} - ${c.course_title} (${c.level}L)</option>`).join('');
+      hodCourseSel.innerHTML = `<option value="">All ${state.selectedLevel ? state.selectedLevel + 'L' : '300L–500L'} (${semLabel}) Courses</option>` +
+        state.courses.map(c => `<option value="${c.id}">${c.course_code} - ${c.course_title} (${c.level}L • ${c.semester === 2 ? '2nd Sem' : '1st Sem'})</option>`).join('');
       hodCourseSel.value = prevCourse;
 
       const lectSel = document.getElementById('lecturerCourseSelect');
       lectSel.innerHTML = state.courses.map(c =>
-        `<option value="${c.id}" data-lecturer="${c.lecturer_name}">${c.course_code} (${c.level}L) — ${c.course_title}</option>`
+        `<option value="${c.id}" data-lecturer="${c.lecturer_name}">${c.course_code} (${c.level}L • ${c.semester === 2 ? '2nd Sem' : '1st Sem'}) — ${c.course_title}</option>`
       ).join('');
       if (state.courses[0]) {
         document.getElementById('sessionStarterInput').value = state.courses[0].lecturer_name;
@@ -754,9 +1019,9 @@
       };
 
       const sessionOptions = state.sessions.map(s =>
-        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒'} ${s.course_code} (Wk ${s.week_number}) - ${s.session_uid}</option>`
+        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒'} ${s.course_code} (${s.semester === 2 ? '2nd Sem' : '1st Sem'} Wk ${s.week_number}) - ${s.session_uid}</option>`
       ).join('');
-      document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || '<option value="">No sessions yet — start one in Lecturer tab</option>';
+      document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || '<option value="">No sessions in this semester — start one in Lecturer tab</option>';
       document.getElementById('studentSelfSessionSelect').innerHTML = sessionOptions || '<option value="">No active sessions</option>';
 
       document.getElementById('kioskStudentSelect').innerHTML = state.students.map(st =>
@@ -765,12 +1030,13 @@
     }
 
     // =========================================================================
-    // HOD 70% ELIGIBILITY REPORT & COURSE EDITING
+    // HOD 70% ELIGIBILITY REPORT, COURSE EDITING & DELETION
     // =========================================================================
     async function loadHodEligibility() {
       const courseId = document.getElementById('hodCourseSelect').value;
       let url = `/api/hod/eligibility?department_id=${state.selectedDeptId}`;
       if (state.selectedLevel) url += `&level=${state.selectedLevel}`;
+      if (state.selectedSemester) url += `&semester=${state.selectedSemester}`;
       if (courseId) url += `&course_id=${courseId}`;
 
       const res = await fetch(url);
@@ -779,7 +1045,7 @@
       document.getElementById('hodDeptHeading').textContent =
         `Department of ${state.hodReport.department.name} (${state.hodReport.department.code})`;
       document.getElementById('hodNameSub').textContent =
-        `Head of Department: ${state.hodReport.department.hod_name} • Scope: 300L, 400L & 500L Departmental Core Courses`;
+        `Head of Department: ${state.hodReport.department.hod_name}`;
 
       document.getElementById('kpiCoursesCount').textContent = state.hodReport.summary.courses_analyzed;
       document.getElementById('kpiEligibleCount').textContent = state.hodReport.summary.total_eligible_entries;
@@ -794,7 +1060,8 @@
       const container = document.getElementById('hodCoursesContainer');
 
       if (state.hodReport.courses.length === 0) {
-        container.innerHTML = `<div class="glass rounded-2xl p-8 text-center text-slate-400">No departmental courses found for this filter. Click "+ Add 300L/400L/500L Course" above.</div>`;
+        const semName = state.selectedSemester === 1 ? 'First Semester' : (state.selectedSemester === 2 ? 'Second Semester' : 'Selected');
+        container.innerHTML = `<div class="glass rounded-2xl p-8 text-center text-slate-400">No ${semName} courses found for this level filter. Click <b>"+ Add 1st/2nd Sem Course"</b> above or switch between <b>1st Sem / 2nd Sem</b> in the top bar.</div>`;
         return;
       }
 
@@ -846,6 +1113,9 @@
         const safeCode = course.course_code.replace(/'/g, "\\'");
         const safeTitle = course.course_title.replace(/'/g, "\\'");
         const safeLecturer = course.lecturer_name.replace(/'/g, "\\'");
+        const semBadge = course.semester === 2
+          ? '<span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono text-xs">2nd Semester</span>'
+          : '<span class="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 font-mono text-xs">1st Semester</span>';
 
         return `
           <div class="glass rounded-2xl border border-slate-800 overflow-hidden">
@@ -854,9 +1124,10 @@
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs font-bold">${course.course_code}</span>
                   <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-xs">${course.level} Level</span>
+                  ${semBadge}
                   <h3 class="font-display font-bold text-base sm:text-lg text-white">${course.course_title}</h3>
-                  <button onclick="openEditCourseModal(${course.course_id}, '${safeCode}', ${course.level}, '${safeTitle}', '${safeLecturer}')" class="no-print ml-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition flex items-center gap-1">
-                    ✏️ Edit Course Details
+                  <button onclick="openEditCourseModal(${course.course_id}, '${safeCode}', ${course.level}, ${course.semester || 1}, '${safeTitle}', '${safeLecturer}')" class="no-print ml-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition flex items-center gap-1">
+                    ✏️ Edit / Remove Course
                   </button>
                 </div>
                 <p class="text-xs text-slate-400 mt-1">
@@ -899,13 +1170,14 @@
 
     function exportHodCsv() {
       if (!state.hodReport) return;
-      let rows = [['Department', 'Course Code', 'Level', 'Lecturer', 'Matric No', 'Student Name', 'Institutional Email', 'Attended', 'Total Classes', 'Attendance %', 'Exam Verdict']];
+      let rows = [['Department', 'Course Code', 'Level', 'Semester', 'Lecturer', 'Matric No', 'Student Name', 'Institutional Email', 'Attended', 'Total Classes', 'Attendance %', 'Exam Verdict']];
       state.hodReport.courses.forEach(c => {
         c.students.forEach(s => {
           rows.push([
             state.hodReport.department.name,
             c.course_code,
             `${c.level}L`,
+            c.semester === 2 ? 'Second Semester' : 'First Semester',
             c.lecturer_name,
             s.matric_no,
             s.full_name,
@@ -924,7 +1196,7 @@
       a.href = url;
       a.download = `HOD_70Pct_Exam_Eligibility_${state.hodReport.department.code}.csv`;
       a.click();
-      showToast('Downloaded official HOD 70% Exam Eligibility CSV (with Institutional Emails)!');
+      showToast('Downloaded official HOD 70% Exam Eligibility CSV!');
     }
 
     // =========================================================================
@@ -940,7 +1212,7 @@
 
       const res = await fetch('/api/sessions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders('lecturer'),
         body: JSON.stringify({ course_id: courseId, week_number: week, started_by: startedBy, topic })
       });
       const data = await res.json();
@@ -958,15 +1230,15 @@
     function renderSessionsList() {
       const box = document.getElementById('sessionsListContainer');
       if (!state.sessions.length) {
-        box.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No lecture sessions recorded for this level yet.</div>`;
+        box.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No lecture sessions recorded for this level and semester yet.</div>`;
         return;
       }
       box.innerHTML = state.sessions.map(s => `
         <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold ${s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}">${s.status}</span>
-              <span class="font-mono text-xs font-bold text-white">${s.course_code} (${s.level}L) • Week ${s.week_number}</span>
+              <span class="font-mono text-xs font-bold text-white">${s.course_code} (${s.level}L • ${s.semester === 2 ? '2nd Sem' : '1st Sem'}) • Week ${s.week_number}</span>
               <span class="font-mono text-[11px] text-slate-500">${s.session_uid}</span>
             </div>
             <p class="text-sm font-medium text-slate-200 mt-1">${s.topic}</p>
@@ -989,12 +1261,15 @@
     function openSessionInKiosk(sessionUid) {
       switchRoleTab('courserep');
       document.getElementById('kioskSessionSelect').value = sessionUid;
-      showToast(`Kiosk locked to session ${sessionUid}`);
     }
 
     async function closeLectureSession(sessionUid) {
-      const res = await fetch(`/api/sessions/${sessionUid}/close`, { method: 'POST' });
+      const res = await fetch(`/api/sessions/${sessionUid}/close`, {
+        method: 'POST',
+        headers: authHeaders('lecturer')
+      });
       const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error closing session', 'error');
       showToast(data.message || 'Session closed');
       await refreshAllData();
     }
@@ -1060,7 +1335,7 @@
 
       const res = await fetch('/api/attendance/checkin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders('courserep'),
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -1084,7 +1359,7 @@
       try {
         const res = await fetch('/api/attendance/sync-offline', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders('courserep'),
           body: JSON.stringify({ records: state.offlineQueue })
         });
         const data = await res.json();
@@ -1115,7 +1390,7 @@
 
       const res = await fetch('/api/students/enroll', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders('courserep'),
         body: JSON.stringify({
           department_id: state.selectedDeptId,
           level,
@@ -1138,18 +1413,13 @@
     // =========================================================================
     // STUDENT PORTAL & PASSKEY CHECK-IN
     // =========================================================================
-    function quickLookup(matric) {
-      document.getElementById('studentLookupInput').value = matric;
-      document.getElementById('studentSelfMatric').value = matric;
-      lookupStudentDashboard();
-    }
-
     async function lookupStudentDashboard() {
       const matric = document.getElementById('studentLookupInput').value.trim().toUpperCase();
       const box = document.getElementById('studentPersonalResult');
       if (!matric) return;
 
-      const res = await fetch(`/api/student/lookup?matric_no=${encodeURIComponent(matric)}`);
+      const semParam = state.selectedSemester ? `&semester=${state.selectedSemester}` : '';
+      const res = await fetch(`/api/student/lookup?matric_no=${encodeURIComponent(matric)}${semParam}`);
       const data = await res.json();
       if (!res.ok) {
         box.innerHTML = `<div class="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 text-xs text-rose-200">${data.detail || 'Student not found'}</div>`;
@@ -1161,11 +1431,13 @@
         const badge = c.exam_eligible
           ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">ELIGIBLE (≥70%)</span>`
           : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold">BARRED (<70%)</span>`;
+        const semTag = c.semester === 2 ? '2nd Sem' : '1st Sem';
         return `
           <div class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between gap-3">
             <div>
               <div class="flex items-center gap-2">
                 <span class="font-mono text-xs font-bold text-emerald-400">${c.course_code}</span>
+                <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">${semTag}</span>
                 <span class="text-sm font-semibold text-white">${c.course_title}</span>
               </div>
               <p class="text-xs text-slate-400 mt-0.5">Lecturer: ${c.lecturer_name} • Attended: <b class="text-white font-mono">${c.attended} / ${c.total_sessions}</b> lectures</p>
@@ -1190,19 +1462,19 @@
             <div class="text-teal-400">✓ Phone Passkey Bound</div>
           </div>
         </div>
-        <div class="space-y-2.5">${coursesHtml}</div>
+        <div class="space-y-2.5">${coursesHtml || '<div class="p-4 text-center text-xs text-slate-500">No courses found for this semester filter.</div>'}</div>
       `;
     }
 
     async function studentPasskeyCheckIn() {
       const sessionUid = document.getElementById('studentSelfSessionSelect').value;
       const matricNo = document.getElementById('studentSelfMatric').value.trim().toUpperCase();
-      if (!sessionUid || !matricNo) return showToast('Select an active session and enter your Matric No', 'error');
+      if (!sessionUid || !matricNo) return showToast('Select an active session first', 'error');
 
       const passkeyId = `passkey-${matricNo.replace(/\//g, '-')}`;
       const res = await fetch('/api/attendance/checkin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders('student'),
         body: JSON.stringify({
           session_uid: sessionUid,
           matric_no: matricNo,
@@ -1221,24 +1493,55 @@
     }
 
     // =========================================================================
-    // MODALS FOR ADDING & EDITING DEPARTMENTS AND COURSES
+    // MODALS FOR HOD PROFILE, DEPARTMENTS & COURSES (ADD, EDIT, DELETE)
     // =========================================================================
     function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function openEditHodProfileModal() {
+      if (!state.hodReport) return;
+      document.getElementById('editHodNameInput').value = state.hodReport.department.hod_name || '';
+      document.getElementById('editHodEmailInput').value = state.hodReport.department.hod_email || '';
+      document.getElementById('editHodPinInput').value = '';
+      openModal('editHodModal');
+    }
+
+    async function submitEditHodProfile() {
+      const hod_name = document.getElementById('editHodNameInput').value.trim();
+      const hod_email = document.getElementById('editHodEmailInput').value.trim();
+      const new_pin = document.getElementById('editHodPinInput').value.trim();
+      if (!hod_name) return showToast('Please enter the HOD Name', 'error');
+
+      const res = await fetch(`/api/departments/${state.selectedDeptId}/hod`, {
+        method: 'PUT',
+        headers: authHeaders('hod'),
+        body: JSON.stringify({ hod_name, hod_email, new_pin: new_pin || null })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Failed to update HOD profile', 'error');
+
+      closeModal('editHodModal');
+      showToast(data.message, 'success');
+      await loadDepartments();
+      await refreshAllData();
+    }
 
     function openAddCourseModal() {
       const currDept = state.departments.find(d => d.id === state.selectedDeptId);
       const deptCode = currDept ? currDept.code : 'PEE';
       const lvl = state.selectedLevel || 400;
-      document.getElementById('newCourseCode').placeholder = `e.g. ${deptCode} ${lvl + 5}`;
+      const sem = state.selectedSemester || 1;
+      document.getElementById('newCourseCode').placeholder = `e.g. ${deptCode} ${lvl + (sem === 2 ? 2 : 1)}`;
       document.getElementById('newCourseLevel').value = String(lvl);
+      document.getElementById('newCourseSemester').value = String(sem);
       openModal('courseModal');
     }
 
-    function openEditCourseModal(courseId, code, level, title, lecturer) {
+    function openEditCourseModal(courseId, code, level, semester, title, lecturer) {
       document.getElementById('editCourseId').value = courseId;
       document.getElementById('editCourseCode').value = code;
       document.getElementById('editCourseLevel').value = String(level);
+      document.getElementById('editCourseSemester').value = String(semester || 1);
       document.getElementById('editCourseTitle').value = title;
       document.getElementById('editCourseLecturer').value = lecturer;
       openModal('editCourseModal');
@@ -1248,6 +1551,7 @@
       const courseId = parseInt(document.getElementById('editCourseId').value, 10);
       const course_code = document.getElementById('editCourseCode').value.trim().toUpperCase();
       const level = parseInt(document.getElementById('editCourseLevel').value, 10);
+      const semester = parseInt(document.getElementById('editCourseSemester').value, 10);
       const course_title = document.getElementById('editCourseTitle').value.trim();
       const lecturer_name = document.getElementById('editCourseLecturer').value.trim();
 
@@ -1257,10 +1561,11 @@
 
       const res = await fetch(`/api/courses/${courseId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders('hod'),
         body: JSON.stringify({
           course_code,
           level,
+          semester,
           course_title,
           lecturer_name
         })
@@ -1270,6 +1575,9 @@
 
       closeModal('editCourseModal');
       showToast(data.message, 'success');
+      if (state.selectedSemester !== 0 && state.selectedSemester !== semester) {
+        setGlobalSemester(semester);
+      }
       if (state.selectedLevel !== 0 && state.selectedLevel !== level) {
         setGlobalLevel(level);
       } else {
@@ -1277,16 +1585,34 @@
       }
     }
 
+    async function deleteCurrentEditingCourse() {
+      const courseId = parseInt(document.getElementById('editCourseId').value, 10);
+      const courseCode = document.getElementById('editCourseCode').value;
+      if (!confirm(`Are you sure you want to permanently remove ${courseCode}?`)) return;
+
+      const res = await fetch(`/api/courses/${courseId}`, {
+        method: 'DELETE',
+        headers: authHeaders('hod')
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error deleting course', 'error');
+
+      closeModal('editCourseModal');
+      showToast(data.message, 'warn');
+      await refreshAllData();
+    }
+
     async function submitNewDepartment() {
       const code = document.getElementById('newDeptCode').value.trim().toUpperCase();
       const name = document.getElementById('newDeptName').value.trim();
       const hod_name = document.getElementById('newDeptHod').value.trim();
+      const hod_pin = document.getElementById('newDeptPin').value.trim() || '1234';
       if (!code || !name || !hod_name) return showToast('Please fill all department fields', 'error');
 
       const res = await fetch('/api/departments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, name, hod_name })
+        headers: authHeaders('hod'),
+        body: JSON.stringify({ code, name, hod_name, hod_pin })
       });
       const data = await res.json();
       if (!res.ok) return showToast(data.detail || 'Error creating department', 'error');
@@ -1301,18 +1627,20 @@
     async function submitNewCourse() {
       const course_code = document.getElementById('newCourseCode').value.trim().toUpperCase();
       const level = parseInt(document.getElementById('newCourseLevel').value, 10);
+      const semester = parseInt(document.getElementById('newCourseSemester').value, 10);
       const course_title = document.getElementById('newCourseTitle').value.trim();
       const lecturer_name = document.getElementById('newCourseLecturer').value.trim();
       if (!course_code || !course_title || !lecturer_name) return showToast('Fill all course fields', 'error');
 
       const res = await fetch('/api/courses', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders('hod'),
         body: JSON.stringify({
           department_id: state.selectedDeptId,
           course_code,
           course_title,
           level,
+          semester,
           credit_units: 3,
           lecturer_name,
           lecturer_staff_id: `STF-${course_code.replace(/\s+/g, '')}`
@@ -1326,6 +1654,9 @@
       document.getElementById('newCourseTitle').value = '';
       document.getElementById('newCourseLecturer').value = '';
       showToast(data.message, 'success');
+      if (state.selectedSemester !== 0 && state.selectedSemester !== semester) {
+        setGlobalSemester(semester);
+      }
       if (state.selectedLevel !== 0 && state.selectedLevel !== level) {
         setGlobalLevel(level);
       } else {
@@ -1337,6 +1668,7 @@
     window.addEventListener('DOMContentLoaded', async () => {
       updateNetworkUI();
       await loadDepartments();
+      renderSecurityState();
       await refreshAllData();
     });
   </script>

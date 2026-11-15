@@ -1,7 +1,8 @@
 """
 Engineering Faculty Biometric Attendance & 70% Exam Eligibility System
 Production Backend API (Python FastAPI + PostgreSQL / SQLite fallback)
-Supports 300L, 400L, and 500L Departmental Core Courses across all 13 Engineering Departments.
+Supports 300L, 400L, and 500L Departmental Core Courses across all 13 Engineering Departments,
+First & Second Semester filtering, Course Deletion, HOD Profile Customization, and JWT Role Security.
 """
 import os
 import json
@@ -9,21 +10,25 @@ import math
 import hashlib
 import secrets
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query, Body
+import jwt
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import (
     create_engine, Column, Integer, String, Float, Boolean,
-    DateTime, ForeignKey, Text, UniqueConstraint
+    DateTime, ForeignKey, Text, UniqueConstraint, text
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from dotenv import load_dotenv
 
 load_dotenv()
+
+JWT_SECRET = os.getenv("JWT_SECRET", "eng-biometric-attendance-prod-secret-2026")
+JWT_ALGORITHM = "HS256"
 
 # Database Setup: Uses Supabase PostgreSQL in production if DATABASE_URL is reachable,
 # with automatic resilient fallback to serverless SQLite (/tmp/eng_attendance_v2.db)
@@ -82,6 +87,7 @@ class Course(Base):
     course_code = Column(String(20), index=True, nullable=False)        # e.g., PEE 401
     course_title = Column(String(200), nullable=False)
     level = Column(Integer, nullable=False, index=True)                 # 300, 400, or 500
+    semester = Column(Integer, default=1, nullable=False, index=True)   # 1 = First Semester, 2 = Second Semester
     credit_units = Column(Integer, default=3)
     lecturer_name = Column(String(120), nullable=False)
     lecturer_staff_id = Column(String(50), nullable=False)
@@ -122,6 +128,7 @@ class LectureSession(Base):
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=False, index=True)
     level = Column(Integer, nullable=False, index=True)
+    semester = Column(Integer, default=1, nullable=False, index=True)   # 1 = First Semester, 2 = Second Semester
     topic = Column(String(200), nullable=False)
     week_number = Column(Integer, default=1)
     started_by = Column(String(120), nullable=False)
@@ -152,7 +159,7 @@ class AttendanceRecord(Base):
 
 
 # =====================================================================
-# HELPERS & SEED DATA FOR ALL 13 ENGINEERING DEPARTMENTS
+# HELPERS, MIGRATIONS & SEED DATA FOR ALL 13 ENGINEERING DEPARTMENTS
 # =====================================================================
 
 ALL_13_ENGINEERING_DEPARTMENTS = [
@@ -176,6 +183,28 @@ def hash_pin(pin: str) -> str:
     return hashlib.sha256(f"eng_salt_2026:{pin.strip()}".encode()).hexdigest()
 
 
+def create_access_token(data: Dict[str, Any]) -> str:
+    payload = data.copy()
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(hours=18)
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def verify_access_token(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required: Please unlock this portal with your Role PIN/Credentials first."
+        )
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Session expired or invalid security token. Please sign in to the portal again."
+        )
+
+
 def compute_cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
     if not vec_a or not vec_b or len(vec_a) != len(vec_b):
         return 0.0
@@ -197,10 +226,50 @@ def generate_deterministic_signature(seed_text: str, dims: int = 32) -> List[flo
     return [round(v / norm, 5) for v in vals]
 
 
+def infer_semester_from_code(course_code: str) -> int:
+    """Infers 1st vs 2nd semester from standard Nigerian university course numbering (odd=1, even=2)."""
+    digits = [ch for ch in course_code if ch.isdigit()]
+    if digits:
+        last_digit = int(digits[-1])
+        return 2 if last_digit % 2 == 0 else 1
+    return 1
+
+
+def run_schema_migrations():
+    """Safely adds `semester` columns to existing Supabase PostgreSQL tables and cleans up PEE310."""
+    with engine.begin() as conn:
+        try:
+            conn.execute(text("ALTER TABLE courses ADD COLUMN IF NOT EXISTS semester INTEGER DEFAULT 1 NOT NULL"))
+        except Exception:
+            try:
+                conn.execute(text("ALTER TABLE courses ADD COLUMN semester INTEGER DEFAULT 1 NOT NULL"))
+            except Exception:
+                pass
+        try:
+            conn.execute(text("ALTER TABLE lecture_sessions ADD COLUMN IF NOT EXISTS semester INTEGER DEFAULT 1 NOT NULL"))
+        except Exception:
+            try:
+                conn.execute(text("ALTER TABLE lecture_sessions ADD COLUMN semester INTEGER DEFAULT 1 NOT NULL"))
+            except Exception:
+                pass
+
+
 def init_and_seed_db():
     Base.metadata.create_all(bind=engine)
+    run_schema_migrations()
     db = SessionLocal()
     try:
+        # Remove PEE310 / PEE 310 as explicitly requested by the user
+        pee310_courses = db.query(Course).filter(
+            Course.course_code.in_(["PEE310", "PEE 310", "PET310", "PET 310"])
+        ).all()
+        for c_del in pee310_courses:
+            db.query(AttendanceRecord).filter(AttendanceRecord.course_id == c_del.id).delete()
+            db.query(LectureSession).filter(LectureSession.course_id == c_del.id).delete()
+            db.delete(c_del)
+        if pee310_courses:
+            db.commit()
+
         # Migrate legacy PET code to PEE if present, and ensure all 13 departments exist
         legacy_pet = db.query(Department).filter(Department.code == "PET").first()
         if legacy_pet:
@@ -224,57 +293,90 @@ def init_and_seed_db():
                 db.flush()
             dept_map[code] = existing
 
+        #Also ensure any existing courses with PET prefix are updated to PEE
+        pet_courses = db.query(Course).filter(Course.course_code.like("PET %")).all()
+        for pc in pet_courses:
+            pc.course_code = pc.course_code.replace("PET ", "PEE ", 1)
         db.commit()
 
-        if db.query(Course).count() > 0:
+        # Ensure Second Semester demo courses exist for PEE so both 1st & 2nd Semester views have rich courses
+        pee_dept = dept_map.get("PEE")
+        if pee_dept:
+            second_sem_pee = [
+                ("PEE 302", "Reservoir Rock & Fluid Properties Lab (2nd Sem)", 300, 2, 3, "Dr. K. Ibe", "STF-PEE-07"),
+                ("PEE 402", "Natural Gas Transmission & Processing (2nd Sem)", 400, 2, 4, "Dr. M. O. Nwosu", "STF-PEE-08"),
+                ("PEE 404", "Subsea & Offshore Drilling Engineering (2nd Sem)", 400, 2, 3, "Prof. E. O. Adewale", "STF-PEE-09"),
+                ("PEE 502", "Enhanced Oil Recovery & Reservoir Simulation (2nd Sem)", 500, 2, 4, "Prof. B. Tamuno", "STF-PEE-10"),
+            ]
+            for c_code, title, lvl, sem, units, lect, staff_id in second_sem_pee:
+                exists_c = db.query(Course).filter(
+                    Course.department_id == pee_dept.id,
+                    Course.course_code == c_code
+                ).first()
+                if not exists_c:
+                    db.add(Course(
+                        department_id=pee_dept.id,
+                        course_code=c_code,
+                        course_title=title,
+                        level=lvl,
+                        semester=sem,
+                        credit_units=units,
+                        lecturer_name=lect,
+                        lecturer_staff_id=staff_id,
+                        lecturer_pin_hash=hash_pin("1234"),
+                    ))
+            db.commit()
+
+        if db.query(Course).count() > 6:
             return
 
         # Seed Departmental Core Courses for 300L, 400L, and 500L across key departments
         courses_seed = [
-            # Petroleum Engineering (PEE)
-            ("PEE", "PEE 301", "Reservoir Engineering I", 300, 3, "Dr. K. Ibe", "STF-PEE-01"),
-            ("PEE", "PEE 303", "Drilling Fluids Technology", 300, 3, "Engr. Dr. F. Briggs", "STF-PEE-02"),
-            ("PEE", "PEE 401", "Applied Reservoir Engineering II", 400, 4, "Dr. M. O. Nwosu", "STF-PEE-03"),
-            ("PEE", "PEE 403", "Well Logging & Formation Evaluation", 400, 3, "Prof. E. O. Adewale", "STF-PEE-04"),
-            ("PEE", "PEE 501", "Petroleum Production Engineering", 500, 4, "Prof. B. Tamuno", "STF-PEE-05"),
-            ("PEE", "PEE 505", "Natural Gas Engineering & Processing", 500, 3, "Dr. R. Lawson", "STF-PEE-06"),
+            # Petroleum Engineering (PEE) - 1st Semester
+            ("PEE", "PEE 301", "Reservoir Engineering I", 300, 1, 3, "Dr. K. Ibe", "STF-PEE-01"),
+            ("PEE", "PEE 303", "Drilling Fluids Technology", 300, 1, 3, "Engr. Dr. F. Briggs", "STF-PEE-02"),
+            ("PEE", "PEE 401", "Applied Reservoir Engineering II", 400, 1, 4, "Dr. M. O. Nwosu", "STF-PEE-03"),
+            ("PEE", "PEE 403", "Well Logging & Formation Evaluation", 400, 1, 3, "Prof. E. O. Adewale", "STF-PEE-04"),
+            ("PEE", "PEE 501", "Petroleum Production Engineering", 500, 1, 4, "Prof. B. Tamuno", "STF-PEE-05"),
+            ("PEE", "PEE 505", "Natural Gas Engineering & Processing", 500, 1, 3, "Dr. R. Lawson", "STF-PEE-06"),
             # Chemical Engineering (CHE)
-            ("CHE", "CHE 301", "Chemical Engineering Thermodynamics", 300, 3, "Dr. U. Okafor", "STF-CHE-01"),
-            ("CHE", "CHE 401", "Chemical Reaction Kinetics & Reactor Design", 400, 4, "Prof. S. U. Eze", "STF-CHE-02"),
-            ("CHE", "CHE 501", "Process Dynamics, Control & Plant Design", 500, 4, "Dr. L. Nwachukwu", "STF-CHE-03"),
+            ("CHE", "CHE 301", "Chemical Engineering Thermodynamics", 300, 1, 3, "Dr. U. Okafor", "STF-CHE-01"),
+            ("CHE", "CHE 401", "Chemical Reaction Kinetics & Reactor Design", 400, 1, 4, "Prof. S. U. Eze", "STF-CHE-02"),
+            ("CHE", "CHE 501", "Process Dynamics, Control & Plant Design", 500, 1, 4, "Dr. L. Nwachukwu", "STF-CHE-03"),
             # Civil Engineering (CVE)
-            ("CVE", "CVE 301", "Structural Mechanics & Analysis I", 300, 3, "Dr. P. Audu", "STF-CVE-01"),
-            ("CVE", "CVE 401", "Design of Reinforced Concrete Structures", 400, 4, "Prof. T. K. Danjuma", "STF-CVE-02"),
-            ("CVE", "CVE 501", "Geotechnical & Highway Foundation Engineering", 500, 4, "Dr. G. Osho", "STF-CVE-03"),
+            ("CVE", "CVE 301", "Structural Mechanics & Analysis I", 300, 1, 3, "Dr. P. Audu", "STF-CVE-01"),
+            ("CVE", "CVE 401", "Design of Reinforced Concrete Structures", 400, 1, 4, "Prof. T. K. Danjuma", "STF-CVE-02"),
+            ("CVE", "CVE 501", "Geotechnical & Highway Foundation Engineering", 500, 1, 4, "Dr. G. Osho", "STF-CVE-03"),
             # Computer Engineering (CPE)
-            ("CPE", "CPE 301", "Microprocessors & Embedded Systems", 300, 3, "Engr. T. Obi", "STF-CPE-01"),
-            ("CPE", "CPE 401", "Computer Architecture & Digital System Design", 400, 4, "Dr. A. M. Nsofor", "STF-CPE-02"),
-            ("CPE", "CPE 501", "Distributed Computing & Cyber-Physical Systems", 500, 4, "Prof. V. Okeke", "STF-CPE-03"),
+            ("CPE", "CPE 301", "Microprocessors & Embedded Systems", 300, 1, 3, "Engr. T. Obi", "STF-CPE-01"),
+            ("CPE", "CPE 401", "Computer Architecture & Digital System Design", 400, 1, 4, "Dr. A. M. Nsofor", "STF-CPE-02"),
+            ("CPE", "CPE 501", "Distributed Computing & Cyber-Physical Systems", 500, 1, 4, "Prof. V. Okeke", "STF-CPE-03"),
             # Electrical/Electronic Engineering (EEE)
-            ("EEE", "EEE 301", "Electromagnetic Fields & Waves", 300, 3, "Dr. J. Kalu", "STF-EEE-01"),
-            ("EEE", "EEE 401", "Control Engineering & Instrumentation", 400, 4, "Prof. I. A. Bello", "STF-EEE-02"),
-            ("EEE", "EEE 501", "Power Systems Analysis & High Voltage", 500, 4, "Dr. O. Fasanya", "STF-EEE-03"),
+            ("EEE", "EEE 301", "Electromagnetic Fields & Waves", 300, 1, 3, "Dr. J. Kalu", "STF-EEE-01"),
+            ("EEE", "EEE 401", "Control Engineering & Instrumentation", 400, 1, 4, "Prof. I. A. Bello", "STF-EEE-02"),
+            ("EEE", "EEE 501", "Power Systems Analysis & High Voltage", 500, 1, 4, "Dr. O. Fasanya", "STF-EEE-03"),
             # Mechanical Engineering (MEE)
-            ("MEE", "MEE 301", "Fluid Mechanics II", 300, 3, "Dr. A. Balogun", "STF-MEE-01"),
-            ("MEE", "MEE 401", "Applied Thermodynamics & Heat Transfer", 400, 4, "Prof. C. N. Okafor", "STF-MEE-02"),
-            ("MEE", "MEE 501", "Tribology & Power Plant Engineering", 500, 4, "Dr. H. Usman", "STF-MEE-03"),
+            ("MEE", "MEE 301", "Fluid Mechanics II", 300, 1, 3, "Dr. A. Balogun", "STF-MEE-01"),
+            ("MEE", "MEE 401", "Applied Thermodynamics & Heat Transfer", 400, 1, 4, "Prof. C. N. Okafor", "STF-MEE-02"),
+            ("MEE", "MEE 501", "Tribology & Power Plant Engineering", 500, 1, 4, "Dr. H. Usman", "STF-MEE-03"),
             # Production, Structural, Agricultural, Metallurgical, Mechatronics, Industrial, Marine
-            ("PRE", "PRE 401", "Manufacturing Technology & Machine Tools", 400, 3, "Prof. O. A. Ibhadode", "STF-PRE-01"),
-            ("STE", "STE 401", "Advanced Matrix & Finite Element Structural Analysis", 400, 4, "Prof. K. O. Olusola", "STF-STE-01"),
-            ("AGE", "AGE 401", "Irrigation, Drainage & Soil Water Engineering", 400, 3, "Prof. A. O. Olatunji", "STF-AGE-01"),
-            ("MME", "MME 401", "Physical Metallurgy & Phase Transformations", 400, 3, "Prof. M. N. Nebo", "STF-MME-01"),
-            ("MCE", "MCE 401", "Robotics, Actuators & Mechatronic System Design", 400, 4, "Prof. S. A. Lawal", "STF-MCE-01"),
-            ("INE", "INE 401", "Operations Research & Ergonomics", 400, 3, "Prof. B. O. Akinnuli", "STF-INE-01"),
-            ("MRE", "MRE 401", "Marine Propulsion Systems & Naval Architecture", 400, 4, "Prof. D. T. Tamuno", "STF-MRE-01"),
+            ("PRE", "PRE 401", "Manufacturing Technology & Machine Tools", 400, 1, 3, "Prof. O. A. Ibhadode", "STF-PRE-01"),
+            ("STE", "STE 401", "Advanced Matrix & Finite Element Structural Analysis", 400, 1, 4, "Prof. K. O. Olusola", "STF-STE-01"),
+            ("AGE", "AGE 401", "Irrigation, Drainage & Soil Water Engineering", 400, 1, 3, "Prof. A. O. Olatunji", "STF-AGE-01"),
+            ("MME", "MME 401", "Physical Metallurgy & Phase Transformations", 400, 1, 3, "Prof. M. N. Nebo", "STF-MME-01"),
+            ("MCE", "MCE 401", "Robotics, Actuators & Mechatronic System Design", 400, 1, 4, "Prof. S. A. Lawal", "STF-MCE-01"),
+            ("INE", "INE 401", "Operations Research & Ergonomics", 400, 1, 3, "Prof. B. O. Akinnuli", "STF-INE-01"),
+            ("MRE", "MRE 401", "Marine Propulsion Systems & Naval Architecture", 400, 1, 4, "Prof. D. T. Tamuno", "STF-MRE-01"),
         ]
 
         course_objs = {}
-        for d_code, c_code, title, lvl, units, lect, staff_id in courses_seed:
+        for d_code, c_code, title, lvl, sem, units, lect, staff_id in courses_seed:
             c = Course(
                 department_id=dept_map[d_code].id,
                 course_code=c_code,
                 course_title=title,
                 level=lvl,
+                semester=sem,
                 credit_units=units,
                 lecturer_name=lect,
                 lecturer_staff_id=staff_id,
@@ -283,116 +385,6 @@ def init_and_seed_db():
             db.add(c)
             db.flush()
             course_objs[c_code] = c
-
-        # Seed Level Course Reps (300L, 400L, 500L) using realistic varied Matric No formats
-        reps_seed = [
-            ("PEE", 300, "Chidi Okafor (300L Rep)", "ENG/230/1001"),
-            ("PEE", 400, "Emmanuel Nsofor (400L Course Rep)", "ENG/220/4001"),
-            ("PEE", 500, "Toluwalase Adeyemi (500L Rep)", "UB6474301"),
-        ]
-        for d_code, lvl, name, mat in reps_seed:
-            db.add(CourseRep(
-                department_id=dept_map[d_code].id,
-                level=lvl,
-                full_name=name,
-                matric_no=mat,
-                pin_hash=hash_pin("1234"),
-            ))
-
-        # Seed Realistic Students in PEE 400L showcasing flexible Matric Formats + Institutional Emails:
-        # ENG/123/4567, UB6474386, B1222329, PG2307676
-        pee_400_students = [
-            ("ENG/220/4001", "Emmanuel Nsofor", "emmanuel.nsofor@eng.uniben.edu", True),
-            ("ENG/123/4567", "Aisha Bello", "aisha.bello@eng.uniben.edu", True),
-            ("UB6474386", "Chinedu Eze", "chinedu.eze@eng.uniben.edu", True),
-            ("B1222329", "Oluwaseun Bakare", "oluwaseun.bakare@eng.uniben.edu", True),
-            ("PG2307676", "Ngozi Okonkwo", "ngozi.okonkwo@eng.uniben.edu", True),
-            ("ENG/220/4006", "Babajide Sanwo", "babajide.sanwo@eng.uniben.edu", True),
-            ("UB6474390", "Fatima Danjuma", "fatima.danjuma@eng.uniben.edu", True),
-            ("B1222388", "Kelechi Iheanacho", "kelechi.iheanacho@eng.uniben.edu", True),
-            ("ENG/220/4009", "Damilola Ojo", "damilola.ojo@eng.uniben.edu", True),
-            ("UB6474412", "Uchechukwu Nnaji", "uchechukwu.nnaji@eng.uniben.edu", True),
-            ("B1222405", "Sadiq Abubakar", "sadiq.abubakar@eng.uniben.edu", True),
-            ("PG2307701", "Blessing Tamuno", "blessing.tamuno@eng.uniben.edu", False),
-        ]
-        student_objs = []
-        for mat, name, email, enrolled in pee_400_students:
-            sig = generate_deterministic_signature(mat) if enrolled else None
-            st = Student(
-                department_id=dept_map["PEE"].id,
-                level=400,
-                matric_no=mat,
-                full_name=name,
-                email=email,
-                face_descriptor_json=json.dumps(sig) if sig else None,
-                webauthn_credential_id=f"passkey-{mat.replace('/', '-')}" if enrolled else None,
-                biometric_enrolled_at=datetime.now(timezone.utc) if enrolled else None,
-                enrolled_by_rep="Emmanuel Nsofor (400L Course Rep)" if enrolled else None,
-            )
-            db.add(st)
-            db.flush()
-            student_objs.append(st)
-
-        # Also add 300L and 500L PEE students with institutional emails
-        for mat, name, email, lvl in [
-            ("ENG/230/1001", "Chidi Okafor", "chidi.okafor@eng.uniben.edu", 300),
-            ("UB6501122", "Zainab Lawal", "zainab.lawal@eng.uniben.edu", 300),
-            ("B1230455", "David Mark", "david.mark@eng.uniben.edu", 300),
-            ("UB6474301", "Toluwalase Adeyemi", "toluwalase.adeyemi@eng.uniben.edu", 500),
-            ("ENG/210/5002", "Emeka Ojukwu", "emeka.ojukwu@eng.uniben.edu", 500),
-            ("PG2108844", "Grace Amadi", "grace.amadi@eng.uniben.edu", 500),
-        ]:
-            sig = generate_deterministic_signature(mat)
-            db.add(Student(
-                department_id=dept_map["PEE"].id,
-                level=lvl,
-                matric_no=mat,
-                full_name=name,
-                email=email,
-                face_descriptor_json=json.dumps(sig),
-                webauthn_credential_id=f"passkey-{mat.replace('/', '-')}",
-                biometric_enrolled_at=datetime.now(timezone.utc),
-                enrolled_by_rep="Course Rep",
-            ))
-
-        # Seed 5 Historical Lecture Sessions for PEE 401 so HOD sees >=70% vs <70% barred students
-        pee401 = course_objs["PEE 401"]
-        topics = [
-            (1, "Week 1: Fundamental Reservoir Rock Properties & Porosity"),
-            (2, "Week 2: Fluid Saturation & Capillary Pressure Curves"),
-            (3, "Week 3: Darcy's Law & Multiphase Permeability"),
-            (4, "Week 4: Material Balance Equation (MBE) for Oil Reservoirs"),
-            (5, "Week 5: Drive Mechanisms & Recovery Factor Estimation"),
-        ]
-        attendance_counts = [5, 5, 4, 4, 4, 3, 3, 2, 2, 1, 1, 0]
-
-        for wk, topic in topics:
-            sess = LectureSession(
-                session_uid=f"SESS-PEE401-W{wk}",
-                course_id=pee401.id,
-                department_id=dept_map["PEE"].id,
-                level=400,
-                topic=topic,
-                week_number=wk,
-                started_by="Dr. M. O. Nwosu",
-                status="CLOSED",
-                session_secret=secrets.token_hex(8),
-                closed_at=datetime.now(timezone.utc),
-            )
-            db.add(sess)
-            db.flush()
-
-            for idx, st in enumerate(student_objs):
-                if wk <= attendance_counts[idx]:
-                    db.add(AttendanceRecord(
-                        session_id=sess.id,
-                        course_id=pee401.id,
-                        student_id=st.id,
-                        matric_no=st.matric_no,
-                        verification_method="FACE_BIOMETRIC_KIOSK" if idx % 2 == 0 else "DEVICE_FINGERPRINT_PASSKEY",
-                        confidence_score=0.97,
-                        captured_offline=(wk == 3),
-                    ))
 
         db.commit()
     except Exception as e:
@@ -420,7 +412,7 @@ def get_db():
 app = FastAPI(
     title="EngAttend Biometric API (300L-500L)",
     description="Zero-Impersonation Biometric Attendance & HOD 70% Exam Eligibility System for Engineering",
-    version="1.1.0",
+    version="1.2.0",
 )
 
 app.add_middleware(
@@ -432,6 +424,14 @@ app.add_middleware(
 )
 
 
+class AuthLoginRequest(BaseModel):
+    role: str = Field(..., description="hod, lecturer, courserep, or student")
+    department_id: int
+    pin: Optional[str] = None
+    matric_no: Optional[str] = None
+    level: Optional[int] = 400
+
+
 class DepartmentCreate(BaseModel):
     code: str = Field(..., example="PEE")
     name: str = Field(..., example="Petroleum Engineering")
@@ -440,11 +440,18 @@ class DepartmentCreate(BaseModel):
     hod_pin: str = Field(default="1234")
 
 
+class DepartmentHodUpdate(BaseModel):
+    hod_name: str
+    hod_email: Optional[str] = None
+    new_pin: Optional[str] = None
+
+
 class CourseCreate(BaseModel):
     department_id: int
     course_code: str = Field(..., example="PEE 405")
     course_title: str = Field(..., example="Drilling Engineering II")
     level: int = Field(..., description="Must be 300, 400, or 500")
+    semester: int = Field(default=1, description="1 = First Semester, 2 = Second Semester")
     credit_units: int = Field(default=3)
     lecturer_name: str
     lecturer_staff_id: Optional[str] = None
@@ -456,6 +463,7 @@ class CourseUpdate(BaseModel):
     course_code: str
     course_title: str
     level: int
+    semester: int = 1
     lecturer_name: str
     credit_units: Optional[int] = 3
 
@@ -509,10 +517,126 @@ def health_check(db: Session = Depends(get_db)):
         "status": "ok",
         "database_engine": ACTIVE_DB_LABEL,
         "supported_levels": [300, 400, 500],
+        "supported_semesters": [1, 2],
         "departments_count": db.query(Department).count(),
         "courses_count": db.query(Course).count(),
         "students_count": db.query(Student).count(),
     }
+
+
+@router.post("/auth/login")
+@router.post("/api/auth/login")
+def role_portal_login(payload: AuthLoginRequest, db: Session = Depends(get_db)):
+    """
+    Authenticates access to the 4 protected role portals:
+    1. HOD Portal (Department HOD PIN)
+    2. Course Lecturer Portal (Lecturer Staff PIN)
+    3. Level Course Rep Portal (Course Rep PIN + Matric No)
+    4. Student Profile Portal (Student Matric No verification)
+    """
+    role = payload.role.strip().lower()
+    dept = db.query(Department).filter(Department.id == payload.department_id).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail="Department not found.")
+
+    if role == "hod":
+        if not payload.pin:
+            raise HTTPException(status_code=400, detail="Enter the Department HOD Security PIN.")
+        if hash_pin(payload.pin) != dept.hod_pin_hash:
+            raise HTTPException(status_code=401, detail="Invalid HOD PIN for this department.")
+        token = create_access_token({
+            "role": "hod",
+            "department_id": dept.id,
+            "department_code": dept.code,
+            "actor_name": dept.hod_name,
+        })
+        return {
+            "message": f"Welcome, {dept.hod_name} (HOD, {dept.code})",
+            "token": token,
+            "role": "hod",
+            "department_id": dept.id,
+            "actor_name": dept.hod_name,
+        }
+
+    elif role == "lecturer":
+        if not payload.pin:
+            raise HTTPException(status_code=400, detail="Enter your Lecturer Access PIN.")
+        # Match against any course lecturer PIN in the department or default 1234
+        pin_h = hash_pin(payload.pin)
+        matched_course = db.query(Course).filter(
+            Course.department_id == dept.id,
+            Course.lecturer_pin_hash == pin_h
+        ).first()
+        if not matched_course and pin_h != hash_pin("1234"):
+            raise HTTPException(status_code=401, detail="Invalid Course Lecturer PIN.")
+        actor = matched_course.lecturer_name if matched_course else f"Course Lecturer ({dept.code})"
+        token = create_access_token({
+            "role": "lecturer",
+            "department_id": dept.id,
+            "department_code": dept.code,
+            "actor_name": actor,
+        })
+        return {
+            "message": f"Lecturer Portal Unlocked ({dept.code})",
+            "token": token,
+            "role": "lecturer",
+            "department_id": dept.id,
+            "actor_name": actor,
+        }
+
+    elif role == "courserep":
+        if not payload.pin:
+            raise HTTPException(status_code=400, detail="Enter the Level Course Rep PIN.")
+        pin_h = hash_pin(payload.pin)
+        rep = db.query(CourseRep).filter(
+            CourseRep.department_id == dept.id,
+            CourseRep.pin_hash == pin_h
+        ).first()
+        if not rep and pin_h != hash_pin("1234"):
+            raise HTTPException(status_code=401, detail="Invalid Level Course Rep PIN.")
+        actor = rep.full_name if rep else f"{payload.level or 400}L Course Rep ({dept.code})"
+        token = create_access_token({
+            "role": "courserep",
+            "department_id": dept.id,
+            "department_code": dept.code,
+            "level": payload.level or 400,
+            "actor_name": actor,
+        })
+        return {
+            "message": f"Course Rep Kiosk Unlocked: {actor}",
+            "token": token,
+            "role": "courserep",
+            "department_id": dept.id,
+            "actor_name": actor,
+        }
+
+    elif role == "student":
+        if not payload.matric_no:
+            raise HTTPException(status_code=400, detail="Enter your Matriculation Number to unlock your Student Portal.")
+        matric = payload.matric_no.strip().upper()
+        st = db.query(Student).filter(Student.matric_no == matric).first()
+        if not st:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Matric No '{matric}' is not enrolled yet. Please meet your Level Course Rep to enroll your biometrics."
+            )
+        token = create_access_token({
+            "role": "student",
+            "department_id": st.department_id,
+            "student_id": st.id,
+            "matric_no": st.matric_no,
+            "actor_name": st.full_name,
+        })
+        return {
+            "message": f"Welcome, {st.full_name} ({st.matric_no})",
+            "token": token,
+            "role": "student",
+            "department_id": st.department_id,
+            "matric_no": st.matric_no,
+            "actor_name": st.full_name,
+        }
+
+    raise HTTPException(status_code=400, detail="Invalid role specified.")
 
 
 @router.get("/departments")
@@ -538,7 +662,13 @@ def list_departments(db: Session = Depends(get_db)):
 
 @router.post("/departments")
 @router.post("/api/departments")
-def register_department(payload: DepartmentCreate, db: Session = Depends(get_db)):
+def register_department(
+    payload: DepartmentCreate,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db)
+):
+    if claims.get("role") != "hod":
+        raise HTTPException(status_code=403, detail="Only an authenticated HOD can register a department.")
     code = payload.code.strip().upper()
     existing = db.query(Department).filter(Department.code == code).first()
     if existing:
@@ -559,11 +689,45 @@ def register_department(payload: DepartmentCreate, db: Session = Depends(get_db)
     }}
 
 
+@router.put("/departments/{department_id}/hod")
+@router.put("/api/departments/{department_id}/hod")
+def update_department_hod_profile(
+    department_id: int,
+    payload: DepartmentHodUpdate,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    """Allows the HOD to replace the default/demo HOD name, email, and security PIN for their department."""
+    if claims.get("role") != "hod":
+        raise HTTPException(status_code=403, detail="Only an authenticated HOD can update HOD profile & security settings.")
+    dept = db.query(Department).filter(Department.id == department_id).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail="Department not found.")
+    dept.hod_name = payload.hod_name.strip()
+    if payload.hod_email is not None:
+        dept.hod_email = payload.hod_email.strip()
+    if payload.new_pin and len(payload.new_pin.strip()) >= 4:
+        dept.hod_pin_hash = hash_pin(payload.new_pin.strip())
+    db.commit()
+    db.refresh(dept)
+    return {
+        "message": f"Updated HOD profile & security settings for {dept.name} ({dept.code}).",
+        "department": {
+            "id": dept.id,
+            "code": dept.code,
+            "name": dept.name,
+            "hod_name": dept.hod_name,
+            "hod_email": dept.hod_email,
+        }
+    }
+
+
 @router.get("/courses")
 @router.get("/api/courses")
 def list_courses(
     department_id: Optional[int] = Query(None),
     level: Optional[int] = Query(None),
+    semester: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     q = db.query(Course)
@@ -571,7 +735,9 @@ def list_courses(
         q = q.filter(Course.department_id == department_id)
     if level:
         q = q.filter(Course.level == level)
-    courses = q.order_by(Course.level, Course.course_code).all()
+    if semester in (1, 2):
+        q = q.filter(Course.semester == semester)
+    courses = q.order_by(Course.level, Course.semester, Course.course_code).all()
     out = []
     for c in courses:
         total_sessions = db.query(LectureSession).filter(LectureSession.course_id == c.id).count()
@@ -584,6 +750,7 @@ def list_courses(
             "course_code": c.course_code,
             "course_title": c.course_title,
             "level": c.level,
+            "semester": c.semester or 1,
             "credit_units": c.credit_units,
             "lecturer_name": c.lecturer_name,
             "lecturer_staff_id": c.lecturer_staff_id,
@@ -595,12 +762,21 @@ def list_courses(
 
 @router.post("/courses")
 @router.post("/api/courses")
-def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
+def create_course(
+    payload: CourseCreate,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    if claims.get("role") != "hod":
+        raise HTTPException(status_code=403, detail="Only an authenticated Department HOD can add courses.")
     if payload.level not in (300, 400, 500):
         raise HTTPException(
             status_code=400,
             detail="Only 300L, 400L, and 500L departmental core courses are supported."
         )
+    if payload.semester not in (1, 2):
+        raise HTTPException(status_code=400, detail="Semester must be 1 (First Semester) or 2 (Second Semester).")
+
     code_clean = payload.course_code.strip().upper()
     staff_id = (payload.lecturer_staff_id or f"STF-{code_clean.replace(' ', '')}").strip().upper()
     c = Course(
@@ -608,6 +784,7 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
         course_code=code_clean,
         course_title=payload.course_title.strip(),
         level=payload.level,
+        semester=payload.semester,
         credit_units=payload.credit_units,
         lecturer_name=payload.lecturer_name.strip(),
         lecturer_staff_id=staff_id,
@@ -616,30 +793,41 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
     db.add(c)
     db.commit()
     db.refresh(c)
-    return {"message": f"Course {c.course_code} added successfully.", "id": c.id}
+    sem_label = "First Semester" if c.semester == 1 else "Second Semester"
+    return {"message": f"Course {c.course_code} ({sem_label}) added successfully.", "id": c.id}
 
 
 @router.put("/courses/{course_id}")
 @router.put("/api/courses/{course_id}")
-def update_course_details(course_id: int, payload: CourseUpdate, db: Session = Depends(get_db)):
-    """Allows the HOD to edit the exact details inputted when adding a course (Code, Level, Title, Lecturer)."""
+def update_course_details(
+    course_id: int,
+    payload: CourseUpdate,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    """Allows the HOD to edit the exact details inputted when adding a course (Code, Level, Semester, Title, Lecturer)."""
+    if claims.get("role") != "hod":
+        raise HTTPException(status_code=403, detail="Only an authenticated Department HOD can edit course details.")
     course = db.query(Course).filter(Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
     if payload.level not in (300, 400, 500):
         raise HTTPException(status_code=400, detail="Course level must be 300, 400, or 500.")
+    if payload.semester not in (1, 2):
+        raise HTTPException(status_code=400, detail="Semester must be 1 (First Semester) or 2 (Second Semester).")
 
     course.course_code = payload.course_code.strip().upper()
     course.course_title = payload.course_title.strip()
     course.level = payload.level
+    course.semester = payload.semester
     course.lecturer_name = payload.lecturer_name.strip()
     if payload.credit_units is not None:
         course.credit_units = payload.credit_units
 
-    # Keep any existing lecture sessions for this course aligned with the updated level
     sessions = db.query(LectureSession).filter(LectureSession.course_id == course.id).all()
     for s in sessions:
         s.level = course.level
+        s.semester = course.semester
 
     db.commit()
     db.refresh(course)
@@ -650,9 +838,31 @@ def update_course_details(course_id: int, payload: CourseUpdate, db: Session = D
             "course_code": course.course_code,
             "course_title": course.course_title,
             "level": course.level,
+            "semester": course.semester,
             "lecturer_name": course.lecturer_name,
         }
     }
+
+
+@router.delete("/courses/{course_id}")
+@router.delete("/api/courses/{course_id}")
+def delete_course(
+    course_id: int,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    """Allows the HOD to permanently remove a course and its associated sessions."""
+    if claims.get("role") != "hod":
+        raise HTTPException(status_code=403, detail="Only an authenticated Department HOD can remove courses.")
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    code = course.course_code
+    db.query(AttendanceRecord).filter(AttendanceRecord.course_id == course.id).delete()
+    db.query(LectureSession).filter(LectureSession.course_id == course.id).delete()
+    db.delete(course)
+    db.commit()
+    return {"message": f"Course {code} has been permanently removed."}
 
 
 @router.get("/students")
@@ -692,11 +902,16 @@ def list_students(
 
 @router.post("/students/enroll")
 @router.post("/api/students/enroll")
-def enroll_student_biometrics(payload: StudentEnrollRequest, db: Session = Depends(get_db)):
+def enroll_student_biometrics(
+    payload: StudentEnrollRequest,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    if claims.get("role") not in ("courserep", "hod", "lecturer"):
+        raise HTTPException(status_code=403, detail="Only an authenticated Course Rep, Lecturer, or HOD can enroll students.")
     if payload.level not in (300, 400, 500):
         raise HTTPException(status_code=400, detail="Student level must be 300, 400, or 500.")
 
-    # Flexible Matric No normalization: trim whitespace and uppercase (supports ENG/123/4567, UB6474386, B1222329, PG2307676, etc.)
     matric = payload.matric_no.strip().upper()
     if len(matric) < 3:
         raise HTTPException(status_code=400, detail="Please enter a valid Matriculation Number.")
@@ -756,7 +971,13 @@ def enroll_student_biometrics(payload: StudentEnrollRequest, db: Session = Depen
 
 @router.post("/sessions")
 @router.post("/api/sessions")
-def start_lecture_session(payload: SessionCreateRequest, db: Session = Depends(get_db)):
+def start_lecture_session(
+    payload: SessionCreateRequest,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    if claims.get("role") not in ("lecturer", "hod", "courserep"):
+        raise HTTPException(status_code=403, detail="Only an authenticated Course Lecturer, HOD, or Course Rep can start a session.")
     course = db.query(Course).filter(Course.id == payload.course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -767,6 +988,7 @@ def start_lecture_session(payload: SessionCreateRequest, db: Session = Depends(g
         course_id=course.id,
         department_id=course.department_id,
         level=course.level,
+        semester=course.semester or 1,
         topic=payload.topic.strip(),
         week_number=payload.week_number,
         started_by=payload.started_by.strip(),
@@ -779,7 +1001,7 @@ def start_lecture_session(payload: SessionCreateRequest, db: Session = Depends(g
     db.commit()
     db.refresh(sess)
     return {
-        "message": f"Live attendance session started for {course.course_code}",
+        "message": f"Live attendance session started for {course.course_code} ({'1st' if sess.semester == 1 else '2nd'} Semester)",
         "session": {
             "id": sess.id,
             "session_uid": sess.session_uid,
@@ -787,6 +1009,7 @@ def start_lecture_session(payload: SessionCreateRequest, db: Session = Depends(g
             "course_code": course.course_code,
             "course_title": course.course_title,
             "level": course.level,
+            "semester": sess.semester,
             "topic": sess.topic,
             "week_number": sess.week_number,
             "started_by": sess.started_by,
@@ -802,6 +1025,7 @@ def list_sessions(
     department_id: Optional[int] = Query(None),
     course_id: Optional[int] = Query(None),
     level: Optional[int] = Query(None),
+    semester: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     q = db.query(LectureSession)
@@ -811,6 +1035,8 @@ def list_sessions(
         q = q.filter(LectureSession.course_id == course_id)
     if level:
         q = q.filter(LectureSession.level == level)
+    if semester in (1, 2):
+        q = q.filter(LectureSession.semester == semester)
     sessions = q.order_by(LectureSession.id.desc()).limit(50).all()
 
     out = []
@@ -827,6 +1053,7 @@ def list_sessions(
             "course_code": course.course_code if course else "N/A",
             "course_title": course.course_title if course else "N/A",
             "level": s.level,
+            "semester": s.semester or (course.semester if course else 1),
             "topic": s.topic,
             "week_number": s.week_number,
             "started_by": s.started_by,
@@ -840,7 +1067,13 @@ def list_sessions(
 
 @router.post("/sessions/{session_uid}/close")
 @router.post("/api/sessions/{session_uid}/close")
-def close_session(session_uid: str, db: Session = Depends(get_db)):
+def close_session(
+    session_uid: str,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    if claims.get("role") not in ("lecturer", "hod"):
+        raise HTTPException(status_code=403, detail="Only an authenticated Course Lecturer or HOD can lock a session.")
     sess = db.query(LectureSession).filter(LectureSession.session_uid == session_uid).first()
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -926,14 +1159,29 @@ def _process_single_checkin(item: BiometricCheckInRequest, db: Session) -> Dict[
 
 @router.post("/attendance/checkin")
 @router.post("/api/attendance/checkin")
-def check_in_student(payload: BiometricCheckInRequest, db: Session = Depends(get_db)):
+def check_in_student(
+    payload: BiometricCheckInRequest,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    if claims.get("role") == "student" and claims.get("matric_no") != payload.matric_no.strip().upper():
+        raise HTTPException(
+            status_code=403,
+            detail="Anti-Impersonation Block: You can only check in with your own authenticated Student Profile!"
+        )
     result = _process_single_checkin(payload, db)
     return {"message": f"Biometric attendance verified for {result['full_name']}", "record": result}
 
 
 @router.post("/attendance/sync-offline")
 @router.post("/api/attendance/sync-offline")
-def sync_offline_attendance(payload: OfflineBulkSyncRequest, db: Session = Depends(get_db)):
+def sync_offline_attendance(
+    payload: OfflineBulkSyncRequest,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    if claims.get("role") not in ("courserep", "lecturer", "hod"):
+        raise HTTPException(status_code=403, detail="Only an authenticated Course Rep, Lecturer, or HOD can sync offline logs.")
     synced = []
     errors = []
     for item in payload.records:
@@ -959,6 +1207,7 @@ def sync_offline_attendance(payload: OfflineBulkSyncRequest, db: Session = Depen
 def hod_exam_eligibility_report(
     department_id: int = Query(...),
     level: Optional[int] = Query(None),
+    semester: Optional[int] = Query(None),
     course_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -969,9 +1218,11 @@ def hod_exam_eligibility_report(
     courses_q = db.query(Course).filter(Course.department_id == department_id)
     if level:
         courses_q = courses_q.filter(Course.level == level)
+    if semester in (1, 2):
+        courses_q = courses_q.filter(Course.semester == semester)
     if course_id:
         courses_q = courses_q.filter(Course.id == course_id)
-    courses = courses_q.order_by(Course.level, Course.course_code).all()
+    courses = courses_q.order_by(Course.level, Course.semester, Course.course_code).all()
 
     course_reports = []
     total_eligible_instances = 0
@@ -1027,6 +1278,7 @@ def hod_exam_eligibility_report(
             "course_code": c.course_code,
             "course_title": c.course_title,
             "level": c.level,
+            "semester": c.semester or 1,
             "credit_units": c.credit_units,
             "lecturer_name": c.lecturer_name,
             "total_sessions_held": total_sessions,
@@ -1042,6 +1294,7 @@ def hod_exam_eligibility_report(
             "code": dept.code,
             "name": dept.name,
             "hod_name": dept.hod_name,
+            "hod_email": dept.hod_email,
             "min_attendance_pct": dept.min_attendance_pct,
         },
         "summary": {
@@ -1055,17 +1308,24 @@ def hod_exam_eligibility_report(
 
 @router.get("/student/lookup")
 @router.get("/api/student/lookup")
-def student_personal_status(matric_no: str = Query(...), db: Session = Depends(get_db)):
+def student_personal_status(
+    matric_no: str = Query(...),
+    semester: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
     matric = matric_no.strip().upper()
     st = db.query(Student).filter(Student.matric_no == matric).first()
     if not st:
         raise HTTPException(status_code=404, detail=f"Matric number {matric} not found.")
 
     dept = db.query(Department).filter(Department.id == st.department_id).first()
-    courses = db.query(Course).filter(
+    courses_q = db.query(Course).filter(
         Course.department_id == st.department_id,
         Course.level == st.level
-    ).order_by(Course.course_code).all()
+    )
+    if semester in (1, 2):
+        courses_q = courses_q.filter(Course.semester == semester)
+    courses = courses_q.order_by(Course.semester, Course.course_code).all()
 
     course_breakdown = []
     for c in courses:
@@ -1079,6 +1339,7 @@ def student_personal_status(matric_no: str = Query(...), db: Session = Depends(g
         course_breakdown.append({
             "course_code": c.course_code,
             "course_title": c.course_title,
+            "semester": c.semester or 1,
             "lecturer_name": c.lecturer_name,
             "attended": attended,
             "total_sessions": total_sessions,
