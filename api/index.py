@@ -115,6 +115,7 @@ class Student(Base):
     full_name = Column(String(120), nullable=False)
     email = Column(String(150), nullable=False)                         # Institutional email for HOD warning alerts
     face_descriptor_json = Column(Text, nullable=True)
+    face_photo_b64 = Column(Text, nullable=True)                        # Enrolled face reference thumbnail (base64 JPEG)
     webauthn_credential_id = Column(String(255), nullable=True)
     biometric_enrolled_at = Column(DateTime, nullable=True)
     enrolled_by_rep = Column(String(120), nullable=True)
@@ -216,6 +217,13 @@ def compute_cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
+def compute_euclidean_distance(vec_a: List[float], vec_b: List[float]) -> float:
+    """Computes L2 Euclidean distance between two 128D dlib/ResNet-34 facial embeddings."""
+    if not vec_a or not vec_b or len(vec_a) != len(vec_b):
+        return 999.0
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(vec_a, vec_b)))
+
+
 def generate_deterministic_signature(seed_text: str, dims: int = 32) -> List[float]:
     vals = []
     for i in range(dims):
@@ -275,7 +283,7 @@ def deduplicate_courses_in_db(db: Session):
 
 
 def run_schema_migrations():
-    """Safely adds `semester` columns to existing Supabase PostgreSQL tables and cleans up PEE310."""
+    """Safely adds `semester` and `face_photo_b64` columns to existing Supabase PostgreSQL tables."""
     with engine.begin() as conn:
         try:
             conn.execute(text("ALTER TABLE courses ADD COLUMN IF NOT EXISTS semester INTEGER DEFAULT 1 NOT NULL"))
@@ -289,6 +297,13 @@ def run_schema_migrations():
         except Exception:
             try:
                 conn.execute(text("ALTER TABLE lecture_sessions ADD COLUMN semester INTEGER DEFAULT 1 NOT NULL"))
+            except Exception:
+                pass
+        try:
+            conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS face_photo_b64 TEXT"))
+        except Exception:
+            try:
+                conn.execute(text("ALTER TABLE students ADD COLUMN face_photo_b64 TEXT"))
             except Exception:
                 pass
 
@@ -542,6 +557,7 @@ class StudentEnrollRequest(BaseModel):
     full_name: str
     email: str = Field(..., description="Institutional email required for HOD attendance warnings")
     face_descriptor: Optional[List[float]] = None
+    face_photo_b64: Optional[str] = None
     webauthn_credential_id: Optional[str] = None
     enrolled_by_rep: str = "Course Rep"
 
@@ -561,6 +577,7 @@ class BiometricCheckInRequest(BaseModel):
     matric_no: str
     verification_method: str = "FACE_BIOMETRIC_KIOSK"
     face_descriptor: Optional[List[float]] = None
+    face_photo_b64: Optional[str] = None
     webauthn_credential_id: Optional[str] = None
     captured_offline: bool = False
     client_timestamp: Optional[str] = None
@@ -1138,6 +1155,8 @@ def list_students(
     students = q.order_by(Student.matric_no).all()
     result = []
     for s in students:
+        parsed_vec = json.loads(s.face_descriptor_json) if s.face_descriptor_json else None
+        is_neural_128d = bool(parsed_vec and len(parsed_vec) == 128)
         item = {
             "id": s.id,
             "department_id": s.department_id,
@@ -1146,12 +1165,14 @@ def list_students(
             "full_name": s.full_name,
             "email": s.email,
             "has_face_biometric": bool(s.face_descriptor_json),
+            "is_neural_128d": is_neural_128d,
+            "face_photo_b64": s.face_photo_b64,
             "has_passkey": bool(s.webauthn_credential_id),
             "biometric_enrolled_at": s.biometric_enrolled_at.isoformat() if s.biometric_enrolled_at else None,
             "enrolled_by_rep": s.enrolled_by_rep,
         }
         if include_templates:
-            item["face_descriptor"] = json.loads(s.face_descriptor_json) if s.face_descriptor_json else None
+            item["face_descriptor"] = parsed_vec
             item["webauthn_credential_id"] = s.webauthn_credential_id
         result.append(item)
     return result
@@ -1186,11 +1207,14 @@ def enroll_student_biometrics(
             detail="A valid Institutional Email is required so the HOD can send attendance warnings."
         )
 
-    student = db.query(Student).filter(Student.matric_no == matric).first()
-
     face_vec = payload.face_descriptor
-    if not face_vec:
-        face_vec = generate_deterministic_signature(matric)
+    if not face_vec or len(face_vec) < 64:
+        raise HTTPException(
+            status_code=400,
+            detail="Mandatory Live Face Capture Required: Please activate the Enrollment Camera and capture the student's face before enrolling."
+        )
+
+    student = db.query(Student).filter(Student.matric_no == matric).first()
 
     if student:
         student.full_name = payload.full_name.strip()
@@ -1198,6 +1222,8 @@ def enroll_student_biometrics(
         student.department_id = payload.department_id
         student.email = email_clean
         student.face_descriptor_json = json.dumps(face_vec)
+        if payload.face_photo_b64:
+            student.face_photo_b64 = payload.face_photo_b64
         if payload.webauthn_credential_id:
             student.webauthn_credential_id = payload.webauthn_credential_id
         student.biometric_enrolled_at = datetime.now(timezone.utc)
@@ -1210,6 +1236,7 @@ def enroll_student_biometrics(
             full_name=payload.full_name.strip(),
             email=email_clean,
             face_descriptor_json=json.dumps(face_vec),
+            face_photo_b64=payload.face_photo_b64,
             webauthn_credential_id=payload.webauthn_credential_id or f"passkey-{matric.replace('/', '-')}",
             biometric_enrolled_at=datetime.now(timezone.utc),
             enrolled_by_rep=payload.enrolled_by_rep,
@@ -1219,7 +1246,7 @@ def enroll_student_biometrics(
     db.commit()
     db.refresh(student)
     return {
-        "message": f"Biometrics & Institutional Email enrolled for {student.full_name} ({student.matric_no} • {student.level}L)",
+        "message": f"128D Neural Face Biometrics & Institutional Email enrolled for {student.full_name} ({student.matric_no} • {student.level}L)",
         "student": {
             "id": student.id,
             "matric_no": student.matric_no,
@@ -1227,6 +1254,8 @@ def enroll_student_biometrics(
             "email": student.email,
             "level": student.level,
             "has_face_biometric": True,
+            "is_neural_128d": len(face_vec) == 128,
+            "face_photo_b64": student.face_photo_b64,
             "face_descriptor": face_vec,
         },
     }
@@ -1406,29 +1435,40 @@ def _process_single_checkin(
             detail=f"Level/Department mismatch: {matric} is {student.level}L, session is {sess.level}L."
         )
 
-    if not student.face_descriptor_json and not student.webauthn_credential_id:
+    if not student.face_descriptor_json:
         raise HTTPException(
             status_code=403,
-            detail=f"Student {matric} has not enrolled their biometrics with the Level Course Rep yet."
+            detail=f"Student {matric} has not enrolled their facial biometrics with the Level Course Rep yet."
         )
 
+    if not item.face_descriptor or len(item.face_descriptor) < 64:
+        raise HTTPException(
+            status_code=400,
+            detail="Live Camera Facial Verification Required: You must scan your live face on camera during the session to prove physical presence."
+        )
+
+    stored_vec = json.loads(student.face_descriptor_json)
     confidence = 0.98
-    if item.verification_method == "FACE_BIOMETRIC_KIOSK" and item.face_descriptor and student.face_descriptor_json:
-        stored_vec = json.loads(student.face_descriptor_json)
-        if len(item.face_descriptor) == len(stored_vec):
-            sim = compute_cosine_similarity(item.face_descriptor, stored_vec)
-            confidence = round(max(sim, 0.92), 4)
-            if sim < 0.65:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Biometric face signature mismatch! Impersonation blocked."
-                )
-    elif item.verification_method == "DEVICE_FINGERPRINT_PASSKEY" and item.webauthn_credential_id:
-        if student.webauthn_credential_id and item.webauthn_credential_id != student.webauthn_credential_id:
+    euclidean_dist = 0.0
+
+    if len(stored_vec) != len(item.face_descriptor):
+        # Upgrade legacy 32D demo record to the student's first real 128D neural face capture, then lock it permanently
+        student.face_descriptor_json = json.dumps(item.face_descriptor)
+        if item.face_photo_b64 and not student.face_photo_b64:
+            student.face_photo_b64 = item.face_photo_b64
+        student.biometric_enrolled_at = datetime.now(timezone.utc)
+        db.flush()
+        confidence = 0.99
+    else:
+        euclidean_dist = compute_euclidean_distance(item.face_descriptor, stored_vec)
+        sim = compute_cosine_similarity(item.face_descriptor, stored_vec)
+        # Standard dlib / ResNet-34 128D face_recognition threshold: Euclidean distance <= 0.56 and Cosine Similarity >= 0.80
+        if euclidean_dist > 0.56 or sim < 0.80:
             raise HTTPException(
                 status_code=403,
-                detail="Device Passkey mismatch! This phone is registered to a different student."
+                detail=f"Biometric Face Mismatch! The live face on camera does not match {student.full_name} ({student.matric_no}) [L2 Distance: {euclidean_dist:.3f} > 0.56, Cosine: {sim*100:.1f}%]. Impersonation blocked."
             )
+        confidence = round(max(sim, min(0.998, 1.0 - (euclidean_dist * 0.45))), 4)
 
     existing = db.query(AttendanceRecord).filter(
         AttendanceRecord.session_id == sess.id,
@@ -1440,6 +1480,7 @@ def _process_single_checkin(
             "matric_no": student.matric_no,
             "full_name": student.full_name,
             "confidence_score": existing.confidence_score,
+            "euclidean_distance": round(euclidean_dist, 4),
             "lecturer_on_duty": sess.started_by,
             "session_uid": sess.session_uid,
         }
@@ -1462,6 +1503,7 @@ def _process_single_checkin(
         "full_name": student.full_name,
         "verification_method": item.verification_method,
         "confidence_score": confidence,
+        "euclidean_distance": round(euclidean_dist, 4),
         "captured_offline": item.captured_offline,
         "lecturer_on_duty": sess.started_by,
         "session_uid": sess.session_uid,
@@ -1602,12 +1644,15 @@ def hod_exam_eligibility_report(
                 target = math.ceil((dept.min_attendance_pct / 100.0) * total_sessions)
                 classes_needed = max(0, target - attended)
 
+            st_vec = json.loads(st.face_descriptor_json) if st.face_descriptor_json else None
             student_rows.append({
                 "student_id": st.id,
                 "matric_no": st.matric_no,
                 "full_name": st.full_name,
                 "email": st.email,
-                "biometric_enrolled": bool(st.face_descriptor_json or st.webauthn_credential_id),
+                "biometric_enrolled": bool(st.face_descriptor_json),
+                "is_neural_128d": bool(st_vec and len(st_vec) == 128),
+                "face_photo_b64": st.face_photo_b64,
                 "attended_classes": attended,
                 "total_classes": total_sessions,
                 "attendance_pct": pct,
@@ -1693,6 +1738,7 @@ def student_personal_status(
             "exam_eligible": eligible,
         })
 
+    st_vec = json.loads(st.face_descriptor_json) if st.face_descriptor_json else None
     return {
         "student": {
             "id": st.id,
@@ -1703,6 +1749,8 @@ def student_personal_status(
             "department_name": dept.name if dept else "Engineering",
             "department_code": dept.code if dept else "ENG",
             "has_face_biometric": bool(st.face_descriptor_json),
+            "is_neural_128d": bool(st_vec and len(st_vec) == 128),
+            "face_photo_b64": st.face_photo_b64,
             "has_passkey": bool(st.webauthn_credential_id),
         },
         "courses": course_breakdown,
