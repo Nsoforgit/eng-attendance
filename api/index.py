@@ -528,6 +528,13 @@ class CourseLecturerPinUpdate(BaseModel):
     lecturer_name: Optional[str] = None
 
 
+class CourseRepUpdate(BaseModel):
+    """Allows the 300L, 400L, or 500L Course Rep (or HOD) to customize that level's Course Rep Name, Matric No, and PIN."""
+    full_name: str
+    matric_no: Optional[str] = None
+    new_pin: Optional[str] = None
+
+
 class StudentEnrollRequest(BaseModel):
     department_id: int
     level: int = Field(..., description="300, 400, or 500")
@@ -568,6 +575,30 @@ class OfflineBulkSyncRequest(BaseModel):
 # =====================================================================
 
 router = APIRouter()
+
+
+def get_or_create_course_rep(db: Session, dept: Department, level: int) -> CourseRep:
+    """Ensures an isolated CourseRep record exists for the given (department_id, level) in (300, 400, 500)."""
+    rep = db.query(CourseRep).filter(
+        CourseRep.department_id == dept.id,
+        CourseRep.level == level
+    ).first()
+    if not rep:
+        default_matric = f"{dept.code}/{level}/REP01"
+        # Ensure matric_no is unique if another row already used it
+        if db.query(CourseRep).filter(CourseRep.matric_no == default_matric).first():
+            default_matric = f"{dept.code}/{level}/REP-{dept.id}-{level}"
+        rep = CourseRep(
+            department_id=dept.id,
+            level=level,
+            full_name=f"{level} Level Course Rep ({dept.code})",
+            matric_no=default_matric,
+            pin_hash=hash_pin("1234"),
+        )
+        db.add(rep)
+        db.commit()
+        db.refresh(rep)
+    return rep
 
 
 @router.get("/health")
@@ -671,26 +702,36 @@ def role_portal_login(payload: AuthLoginRequest, db: Session = Depends(get_db)):
     elif role == "courserep":
         if not payload.pin:
             raise HTTPException(status_code=400, detail="Enter the Level Course Rep PIN.")
+        if payload.level not in (300, 400, 500):
+            raise HTTPException(
+                status_code=400,
+                detail="Please select your Assigned Level (300 Level, 400 Level, or 500 Level) before entering your PIN."
+            )
+        rep = get_or_create_course_rep(db, dept, payload.level)
         pin_h = hash_pin(payload.pin)
-        rep = db.query(CourseRep).filter(
-            CourseRep.department_id == dept.id,
-            CourseRep.pin_hash == pin_h
-        ).first()
-        if not rep and pin_h != hash_pin("1234"):
-            raise HTTPException(status_code=401, detail="Invalid Level Course Rep PIN.")
-        actor = rep.full_name if rep else f"{payload.level or 400}L Course Rep ({dept.code})"
+        if pin_h != rep.pin_hash:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Invalid PIN for {payload.level} Level Course Rep ({dept.code}). Only the authorized {payload.level}L Course Rep can unlock this level."
+            )
+        actor = f"{rep.full_name} ({rep.level}L)"
         token = create_access_token({
             "role": "courserep",
             "department_id": dept.id,
             "department_code": dept.code,
-            "level": payload.level or 400,
+            "level": rep.level,
+            "rep_name": rep.full_name,
+            "rep_matric": rep.matric_no,
             "actor_name": actor,
         })
         return {
-            "message": f"Course Rep Kiosk Unlocked: {actor}",
+            "message": f"Isolated {rep.level} Level Course Rep Dashboard Unlocked: {rep.full_name}",
             "token": token,
             "role": "courserep",
             "department_id": dept.id,
+            "level": rep.level,
+            "rep_name": rep.full_name,
+            "rep_matric": rep.matric_no,
             "actor_name": actor,
         }
 
@@ -1005,6 +1046,82 @@ def delete_course(
     return {"message": f"Course {code} has been permanently removed."}
 
 
+@router.get("/course-reps")
+@router.get("/api/course-reps")
+def list_course_reps(
+    department_id: int = Query(...),
+    db: Session = Depends(get_db),
+):
+    dept = db.query(Department).filter(Department.id == department_id).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail="Department not found")
+    out = []
+    for lvl in (300, 400, 500):
+        rep = get_or_create_course_rep(db, dept, lvl)
+        level_students_count = db.query(Student).filter(
+            Student.department_id == dept.id,
+            Student.level == lvl
+        ).count()
+        out.append({
+            "id": rep.id,
+            "department_id": dept.id,
+            "department_code": dept.code,
+            "level": rep.level,
+            "full_name": rep.full_name,
+            "matric_no": rep.matric_no,
+            "students_count": level_students_count,
+        })
+    return out
+
+
+@router.put("/course-reps/{department_id}/{level}")
+@router.put("/api/course-reps/{department_id}/{level}")
+def update_level_course_rep(
+    department_id: int,
+    level: int,
+    payload: CourseRepUpdate,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    """Allows the authenticated Level Course Rep (for their own level only) or HOD to customize their Name, Matric No, and private PIN."""
+    role = claims.get("role")
+    if role not in ("courserep", "hod"):
+        raise HTTPException(status_code=403, detail="Only the Level Course Rep or HOD can update this level's Course Rep settings.")
+    if role == "courserep" and (claims.get("department_id") != department_id or claims.get("level") != level):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Strict Level Isolation: You are signed in as {claims.get('level')}L Course Rep and cannot modify {level}L Course Rep credentials."
+        )
+    if level not in (300, 400, 500):
+        raise HTTPException(status_code=400, detail="Level must be 300, 400, or 500.")
+    dept = db.query(Department).filter(Department.id == department_id).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail="Department not found")
+
+    rep = get_or_create_course_rep(db, dept, level)
+    if payload.full_name and payload.full_name.strip():
+        rep.full_name = payload.full_name.strip()
+    if payload.matric_no and payload.matric_no.strip():
+        new_m = payload.matric_no.strip().upper()
+        conflict = db.query(CourseRep).filter(CourseRep.matric_no == new_m, CourseRep.id != rep.id).first()
+        if not conflict:
+            rep.matric_no = new_m
+    if payload.new_pin and len(payload.new_pin.strip()) >= 4:
+        rep.pin_hash = hash_pin(payload.new_pin.strip())
+    db.commit()
+    db.refresh(rep)
+    return {
+        "message": f"Updated {level} Level Course Rep profile & security PIN for {dept.code}.",
+        "course_rep": {
+            "id": rep.id,
+            "department_id": dept.id,
+            "level": rep.level,
+            "full_name": rep.full_name,
+            "matric_no": rep.matric_no,
+        }
+    }
+
+
 @router.get("/students")
 @router.get("/api/students")
 def list_students(
@@ -1047,10 +1164,16 @@ def enroll_student_biometrics(
     claims: Dict[str, Any] = Depends(verify_access_token),
     db: Session = Depends(get_db),
 ):
-    if claims.get("role") not in ("courserep", "hod", "lecturer"):
+    role = claims.get("role")
+    if role not in ("courserep", "hod", "lecturer"):
         raise HTTPException(status_code=403, detail="Only an authenticated Course Rep, Lecturer, or HOD can enroll students.")
     if payload.level not in (300, 400, 500):
         raise HTTPException(status_code=400, detail="Student level must be 300, 400, or 500.")
+    if role == "courserep" and claims.get("level") and claims.get("level") != payload.level:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Strict Level Isolation: You are signed in as the {claims.get('level')} Level Course Rep and can only enroll {claims.get('level')} Level students."
+        )
 
     matric = payload.matric_no.strip().upper()
     if len(matric) < 3:
@@ -1096,7 +1219,7 @@ def enroll_student_biometrics(
     db.commit()
     db.refresh(student)
     return {
-        "message": f"Biometrics & Institutional Email enrolled for {student.full_name} ({student.matric_no})",
+        "message": f"Biometrics & Institutional Email enrolled for {student.full_name} ({student.matric_no} • {student.level}L)",
         "student": {
             "id": student.id,
             "matric_no": student.matric_no,
@@ -1130,6 +1253,12 @@ def start_lecture_session(
     course = db.query(Course).filter(Course.id == payload.course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+
+    if role == "courserep" and claims.get("level") and claims.get("level") != course.level:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Strict Level Isolation: {claims.get('level')}L Course Rep cannot start sessions for a {course.level}L course."
+        )
 
     assigned_list = parse_assigned_lecturers(course.lecturer_name)
     requested_lecturer = (payload.started_by or claims.get("lecturer_name") or "").strip()
@@ -1245,7 +1374,12 @@ def close_session(
     return {"message": f"Session {session_uid} (Taught by {sess.started_by}) closed and locked for HOD reporting."}
 
 
-def _process_single_checkin(item: BiometricCheckInRequest, db: Session, allowed_course_id: Optional[int] = None) -> Dict[str, Any]:
+def _process_single_checkin(
+    item: BiometricCheckInRequest,
+    db: Session,
+    allowed_course_id: Optional[int] = None,
+    allowed_level: Optional[int] = None,
+) -> Dict[str, Any]:
     sess = db.query(LectureSession).filter(LectureSession.session_uid == item.session_uid).first()
     if not sess:
         raise HTTPException(status_code=404, detail=f"Session {item.session_uid} not found.")
@@ -1254,6 +1388,11 @@ def _process_single_checkin(item: BiometricCheckInRequest, db: Session, allowed_
         raise HTTPException(
             status_code=403,
             detail="Strict Course Isolation: You can only record or sync attendance for your own assigned course."
+        )
+    if allowed_level is not None and sess.level != allowed_level:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Strict Level Isolation: You are signed in as the {allowed_level}L Course Rep and cannot record attendance for a {sess.level}L session."
         )
 
     matric = item.matric_no.strip().upper()
@@ -1342,7 +1481,8 @@ def check_in_student(
             detail="Anti-Impersonation Block: You can only check in with your own authenticated Student Profile!"
         )
     allowed_cid = claims.get("course_id") if claims.get("role") == "lecturer" else None
-    result = _process_single_checkin(payload, db, allowed_course_id=allowed_cid)
+    allowed_lvl = claims.get("level") if claims.get("role") == "courserep" else None
+    result = _process_single_checkin(payload, db, allowed_course_id=allowed_cid, allowed_level=allowed_lvl)
     return {
         "message": f"Biometric attendance verified for {result['full_name']} (Class taught by {result.get('lecturer_on_duty', 'Lecturer')})",
         "record": result
@@ -1359,12 +1499,13 @@ def sync_offline_attendance(
     if claims.get("role") not in ("courserep", "lecturer", "hod"):
         raise HTTPException(status_code=403, detail="Only an authenticated Course Rep, Lecturer, or HOD can sync offline logs.")
     allowed_cid = claims.get("course_id") if claims.get("role") == "lecturer" else None
+    allowed_lvl = claims.get("level") if claims.get("role") == "courserep" else None
     synced = []
     errors = []
     for item in payload.records:
         try:
             item.captured_offline = True
-            res = _process_single_checkin(item, db, allowed_course_id=allowed_cid)
+            res = _process_single_checkin(item, db, allowed_course_id=allowed_cid, allowed_level=allowed_lvl)
             synced.append(res)
         except HTTPException as he:
             errors.append({"matric_no": item.matric_no, "error": he.detail})

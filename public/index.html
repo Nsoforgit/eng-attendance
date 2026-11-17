@@ -166,6 +166,19 @@
           </div>
         </div>
 
+        <!-- Level Course Rep Mandatory Level Selection (Shown ONLY when unlocking Tab 3: Level Course Rep) -->
+        <div id="gateCourseRepGroup" class="hidden space-y-3 p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30">
+          <div>
+            <label class="block text-xs text-emerald-300 font-semibold mb-1">1. Select Your Assigned Level (Before Entering PIN) *</label>
+            <select id="gateCourseRepLevelSelect" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-mono text-white">
+              <option value="300">300 Level Course Rep Dashboard</option>
+              <option value="400" selected>400 Level Course Rep Dashboard</option>
+              <option value="500">500 Level Course Rep Dashboard</option>
+            </select>
+            <p class="text-[11px] text-slate-400 mt-1">Strict Level Isolation: Selecting your level directs you straight to that exact level's biometric kiosk &amp; classmate registry.</p>
+          </div>
+        </div>
+
         <div id="gatePinGroup">
           <label id="gatePinLabel" class="block text-xs text-slate-300 font-medium mb-1">Security Access PIN</label>
           <input type="password" id="gatePinInput" placeholder="Enter 4-digit PIN (Default Demo PIN: 1234)" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
@@ -367,20 +380,35 @@
     </section>
 
     <!-- ======================================================================= -->
-    <!-- TAB 3: LEVEL COURSE REP (300L / 400L / 500L) BIOMETRIC KIOSK & ENROLL   -->
+    <!-- TAB 3: LEVEL COURSE REP (ISOLATED 300L / 400L / 500L DASHBOARD)        -->
     <!-- ======================================================================= -->
     <section id="panel-courserep" class="hidden space-y-6">
-      <div class="glass rounded-2xl p-5 border border-emerald-500/30 bg-emerald-950/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <span class="text-xs font-mono uppercase text-emerald-400">300L • 400L • 500L Level Course Rep Portal</span>
-          <h2 class="font-display text-xl font-bold text-white mt-0.5">Samsung Phone Biometric Kiosk & Offline-First Sync Engine</h2>
-          <p class="text-xs text-slate-300 mt-1">
-            No external USB scanner needed! Enroll classmates' faces, device passkeys, and <b>Institutional Emails</b> once. During class, run the live camera scanner—even if lecture hall network drops, attendance saves locally and syncs to the HOD when internet returns.
+      <div class="glass rounded-2xl p-5 sm:p-6 border border-emerald-500/40 bg-emerald-950/10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span id="courseRepIsolatedBadge" class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-mono font-bold uppercase">
+              🔒 Isolated 400 Level Course Rep Dashboard
+            </span>
+            <span id="courseRepDeptPill" class="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[11px] font-mono">
+              Department Registry
+            </span>
+          </div>
+          <h2 id="courseRepHeading" class="font-display text-xl sm:text-2xl font-bold text-white">
+            400 Level Biometric Kiosk &amp; Classmate Enrollment
+          </h2>
+          <p id="courseRepSub" class="text-xs text-slate-300">
+            Authorized Course Rep: <b id="courseRepActiveName" class="text-emerald-400">400L Course Rep</b> • Locked strictly to <b id="courseRepLockedLevelLabel" class="text-white">400 Level</b> students and lecture sessions.
           </p>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <button onclick="cacheDepartmentTemplatesOffline()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
-            📥 Cache Class Biometrics for Offline Use
+        <div class="flex flex-wrap items-center gap-2 shrink-0 no-print">
+          <button onclick="openEditCourseRepModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+            🔐 Customize Level Rep Name &amp; PIN
+          </button>
+          <button onclick="cacheDepartmentTemplatesOffline()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-500/30 text-xs font-semibold transition">
+            📥 Cache Class Biometrics Offline
+          </button>
+          <button onclick="lockCurrentPortal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition">
+            🔄 Switch Level
           </button>
         </div>
       </div>
@@ -390,8 +418,8 @@
         <div class="lg:col-span-7 glass rounded-2xl p-5 border border-slate-800 space-y-4">
           <div class="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h3 class="font-display text-lg font-bold text-white">1. Classroom Biometric Attendance Kiosk</h3>
-              <p class="text-xs text-slate-400">Students step up to the Course Rep/Lecturer Samsung phone or tap their matric number to verify face biometrics.</p>
+              <h3 id="kioskLevelTitle" class="font-display text-lg font-bold text-white">1. Classroom Biometric Attendance Kiosk (400L Only)</h3>
+              <p class="text-xs text-slate-400">Filtered strictly to your authenticated level's lecture sessions and enrolled classmates.</p>
             </div>
             <span id="kioskOfflineIndicator" class="px-2.5 py-1 rounded-full text-[11px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
               Ready • Templates Cached
@@ -400,11 +428,11 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs text-slate-400 mb-1">Active Lecture Session</label>
+              <label class="block text-xs text-slate-400 mb-1">Active Lecture Session (Your Level Only)</label>
               <select id="kioskSessionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"></select>
             </div>
             <div>
-              <label class="block text-xs text-slate-400 mb-1">Select Student (Flexible Matric Format)</label>
+              <label class="block text-xs text-slate-400 mb-1">Select Classmate (Your Level Only)</label>
               <select id="kioskStudentSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"></select>
             </div>
           </div>
@@ -446,21 +474,21 @@
           </div>
         </div>
 
-        <!-- Right 5 Cols: Enroll New 300L/400L/500L Student Biometrics + Institutional Email -->
+        <!-- Right 5 Cols: Enroll New Classmate Biometrics (Locked to Authenticated Level) -->
         <div class="lg:col-span-5 glass rounded-2xl p-5 border border-slate-800 space-y-4">
-          <h3 class="font-display text-lg font-bold text-white">2. Enroll Classmate Biometrics (300L–500L)</h3>
+          <h3 id="enrollCardTitle" class="font-display text-lg font-bold text-white">2. Enroll Classmate Biometrics (Locked to Your Level)</h3>
           <p class="text-xs text-slate-400">
-            Register a student into the departmental registry with their <b>Institutional Email</b> (for HOD attendance warnings) and bind their biometric template.
+            Register a classmate in your authenticated level with their <b>Institutional Email</b> (for HOD attendance warnings) and bind their biometric template.
           </p>
 
           <div class="space-y-3">
             <div class="grid grid-cols-3 gap-2">
               <div>
-                <label class="block text-xs text-slate-400 mb-1">Level</label>
-                <select id="enrollLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
-                  <option value="300">300 Level</option>
-                  <option value="400" selected>400 Level</option>
-                  <option value="500">500 Level</option>
+                <label class="block text-xs text-emerald-400 font-semibold mb-1">Authenticated Level</label>
+                <select id="enrollLevel" disabled class="w-full bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold cursor-not-allowed">
+                  <option value="300">🔒 300 Level</option>
+                  <option value="400" selected>🔒 400 Level</option>
+                  <option value="500">🔒 500 Level</option>
                 </select>
               </div>
               <div class="col-span-2">
@@ -478,12 +506,12 @@
               <input type="email" id="enrollEmail" placeholder="e.g. chukwudi.okafor@eng.uniben.edu" required class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs font-mono text-white" />
             </div>
             <div>
-              <label class="block text-xs text-slate-400 mb-1">Enrolling Course Rep Name</label>
-              <input type="text" id="enrollRepName" value="Emmanuel Nsofor (400L Course Rep)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+              <label class="block text-xs text-slate-400 mb-1">Enrolling Level Course Rep Name</label>
+              <input type="text" id="enrollRepName" value="400L Course Rep" readonly class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-300 font-medium" />
             </div>
 
             <button onclick="enrollStudentBiometric()" class="w-full py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
-              🧬 Capture Biometric Signature & Enroll Student
+              🧬 Capture Biometric Signature & Enroll Classmate
             </button>
           </div>
 
@@ -499,6 +527,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Bottom: Isolated Level Enrolled Classmates Registry -->
+      <div id="courseRepLevelStudentsContainer" class="space-y-4"></div>
     </section>
 
     <!-- ======================================================================= -->
@@ -753,6 +784,39 @@
     </div>
   </div>
 
+  <!-- MODAL: LEVEL COURSE REP CUSTOMIZE NAME, MATRIC & PRIVATE PIN -->
+  <div id="editCourseRepModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-emerald-500/40 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-mono uppercase text-emerald-400">Level Course Rep Security</span>
+          <h3 id="editCourseRepModalTitle" class="font-display text-lg font-bold text-white">Customize Level Course Rep Profile &amp; PIN</h3>
+        </div>
+        <button onclick="closeModal('editCourseRepModal')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">
+        Customize the official Course Rep Name, Matric Number, and private Security PIN for this specific level so other levels cannot access your level's dashboard.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Level Course Rep Full Name</label>
+          <input type="text" id="editCourseRepNameInput" placeholder="e.g. Emmanuel Nsofor" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Level Course Rep Matric No</label>
+          <input type="text" id="editCourseRepMatricInput" placeholder="e.g. ENG/123/4567" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white uppercase" />
+        </div>
+        <div>
+          <label class="block text-xs text-emerald-400 font-semibold mb-1">New Level Course Rep PIN (Leave blank to keep current PIN)</label>
+          <input type="password" id="editCourseRepPinInput" placeholder="Enter new 4+ digit PIN for this level" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+        </div>
+        <button onclick="submitEditCourseRepProfile()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+          💾 Save Level Course Rep Profile &amp; PIN
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // =========================================================================
     // STATE, SECURITY TOKENS & OFFLINE-FIRST STORAGE ENGINE
@@ -765,7 +829,9 @@
       selectedSemester: 1,   // 1 = First Semester, 2 = Second Semester, 0 = Both
       courses: [],
       allDeptCourses: [],    // All courses in the selected department (for the Lecturer Course Gate)
+      courseReps: [],        // 300L, 400L, and 500L Course Reps for the selected department
       students: [],
+      allDeptStudents: [],
       sessions: [],
       hodReport: null,
       lecturerCourseReport: null,
@@ -793,6 +859,10 @@
       }
       // Require course_id on lecturer sessions so old generic tokens re-authenticate per course
       if (role === 'lecturer' && !sess.course_id) {
+        return null;
+      }
+      // Require level (300, 400, or 500) on courserep sessions
+      if (role === 'courserep' && ![300, 400, 500].includes(Number(sess.level))) {
         return null;
       }
       return sess;
@@ -878,7 +948,7 @@
     }
 
     // =========================================================================
-    // ROLE PORTAL SECURITY & PER-COURSE LECTURER ISOLATION GATE
+    // ROLE PORTAL SECURITY & PER-COURSE / PER-LEVEL ISOLATION GATE
     // =========================================================================
     function populateGateLecturerCourses() {
       const courseSel = document.getElementById('gateLecturerCourseSelect');
@@ -891,7 +961,6 @@
       if (prevVal && list.some(c => String(c.id) === String(prevVal))) {
         courseSel.value = prevVal;
       } else {
-        // Default to PEE 401 if present so the user sees Prof. Oyeneyin & Engr. Omoregbe right away
         const pee401 = list.find(c => c.course_code === 'PEE 401');
         if (pee401) courseSel.value = String(pee401.id);
       }
@@ -910,6 +979,23 @@
       nameSel.innerHTML = lecturers.map(l =>
         `<option value="${l.replace(/"/g, '&quot;')}">👨‍🏫 ${l} (${selectedCourse ? selectedCourse.course_code : ''})</option>`
       ).join('');
+    }
+
+    function populateGateCourseRepLevels() {
+      const lvlSel = document.getElementById('gateCourseRepLevelSelect');
+      if (!lvlSel) return;
+      const prevVal = lvlSel.value || String(state.selectedLevel || 400);
+      const levels = [300, 400, 500];
+      lvlSel.innerHTML = levels.map(lvl => {
+        const repObj = state.courseReps.find(r => Number(r.level) === lvl);
+        const repLabel = repObj ? `${repObj.full_name} • ${repObj.students_count} students enrolled` : `${lvl}L Course Rep`;
+        return `<option value="${lvl}">🎓 ${lvl} Level Course Rep Dashboard (${repLabel})</option>`;
+      }).join('');
+      if (levels.includes(Number(prevVal))) {
+        lvlSel.value = String(prevVal);
+      } else {
+        lvlSel.value = '400';
+      }
     }
 
     function renderSecurityState() {
@@ -938,6 +1024,8 @@
 
         if (role === 'lecturer') {
           renderIsolatedLecturerWorkspace();
+        } else if (role === 'courserep') {
+          renderIsolatedCourseRepWorkspace();
         } else if (role === 'student') {
           document.getElementById('studentLookupInput').value = sess.matric_no;
           document.getElementById('studentSelfMatric').value = sess.matric_no;
@@ -953,6 +1041,7 @@
         logoutBtn.classList.add('hidden');
 
         const lectGroup = document.getElementById('gateLecturerGroup');
+        const repGroup = document.getElementById('gateCourseRepGroup');
         const pinGroup = document.getElementById('gatePinGroup');
         const studentGroup = document.getElementById('gateStudentGroup');
         const title = document.getElementById('gateTitle');
@@ -966,6 +1055,7 @@
           sub.textContent = `Only the Head of Department for ${deptLabel} can add/edit/delete courses or modify HOD settings.`;
           pinLabel.textContent = `Department HOD Security PIN`;
           lectGroup.classList.add('hidden');
+          repGroup.classList.add('hidden');
           pinGroup.classList.remove('hidden');
           studentGroup.classList.add('hidden');
         } else if (role === 'lecturer') {
@@ -975,14 +1065,17 @@
           pinLabel.textContent = `3. Enter Course Lecturer Security PIN`;
           populateGateLecturerCourses();
           lectGroup.classList.remove('hidden');
+          repGroup.classList.add('hidden');
           pinGroup.classList.remove('hidden');
           studentGroup.classList.add('hidden');
         } else if (role === 'courserep') {
-          badge.textContent = `Level Course Rep Security Layer • ${deptLabel}`;
-          title.textContent = `Unlock Level Course Rep Kiosk`;
-          sub.textContent = `Authorized 300L, 400L & 500L Course Reps only: verify PIN to enroll student biometrics or run the classroom scanner.`;
-          pinLabel.textContent = `Level Course Rep Authorization PIN`;
+          badge.textContent = `Isolated Level Course Rep Security • ${deptLabel}`;
+          title.textContent = `Unlock Level Course Rep Dashboard`;
+          sub.textContent = `Choose the level (300L, 400L, or 500L) you want to open the dashboard for, then enter that level's Course Rep PIN.`;
+          pinLabel.textContent = `2. Enter Level Course Rep Security PIN`;
+          populateGateCourseRepLevels();
           lectGroup.classList.add('hidden');
+          repGroup.classList.remove('hidden');
           pinGroup.classList.remove('hidden');
           studentGroup.classList.add('hidden');
         } else if (role === 'student') {
@@ -990,6 +1083,7 @@
           title.textContent = `Sign In to Student Profile Portal`;
           sub.textContent = `Enter your enrolled Matriculation Number to view your personal 70% exam eligibility and verify your phone Passkey.`;
           lectGroup.classList.add('hidden');
+          repGroup.classList.add('hidden');
           pinGroup.classList.add('hidden');
           studentGroup.classList.remove('hidden');
         }
@@ -1006,6 +1100,9 @@
       const lecturer_name = role === 'lecturer'
         ? document.getElementById('gateLecturerNameSelect').value
         : undefined;
+      const level = role === 'courserep'
+        ? parseInt(document.getElementById('gateCourseRepLevelSelect').value, 10)
+        : (state.selectedLevel || 400);
 
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -1015,7 +1112,7 @@
           department_id: state.selectedDeptId,
           pin: role !== 'student' ? pin : undefined,
           matric_no: role === 'student' ? matric_no : undefined,
-          level: state.selectedLevel || 400,
+          level,
           course_id,
           lecturer_name
         })
@@ -1029,6 +1126,20 @@
       sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
       document.getElementById('gatePinInput').value = '';
       showToast(data.message, 'success');
+
+      // When a Level Course Rep unlocks a level, automatically direct the global level view to that exact level!
+      if (role === 'courserep' && data.level) {
+        state.selectedLevel = Number(data.level);
+        [300, 400, 500, 0].forEach(l => {
+          const b = document.getElementById(`lvlBtn-${l}`);
+          if (b) {
+            b.className = l === state.selectedLevel
+              ? 'px-2.5 py-1 rounded-md transition bg-emerald-500 text-slate-950 font-bold'
+              : 'px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white';
+          }
+        });
+      }
+
       renderSecurityState();
       await refreshAllData();
     }
@@ -1118,15 +1229,18 @@
       try {
         const lvlParam = state.selectedLevel ? `&level=${state.selectedLevel}` : '';
         const semParam = state.selectedSemester ? `&semester=${state.selectedSemester}` : '';
-        const [coursesRes, allDeptCoursesRes, studentsRes, sessionsRes] = await Promise.all([
+        const [coursesRes, allDeptCoursesRes, courseRepsRes, studentsRes, sessionsRes] = await Promise.all([
           fetch(`/api/courses?department_id=${state.selectedDeptId}${lvlParam}${semParam}`),
           fetch(`/api/courses?department_id=${state.selectedDeptId}`),
+          fetch(`/api/course-reps?department_id=${state.selectedDeptId}`),
           fetch(`/api/students?department_id=${state.selectedDeptId}&include_templates=true`),
           fetch(`/api/sessions?department_id=${state.selectedDeptId}`)
         ]);
         state.courses = await coursesRes.json();
         state.allDeptCourses = await allDeptCoursesRes.json();
+        state.courseReps = await courseRepsRes.json();
         const allStudents = await studentsRes.json();
+        state.allDeptStudents = allStudents;
         state.students = state.selectedLevel
           ? allStudents.filter(s => s.level === state.selectedLevel)
           : allStudents;
@@ -1143,8 +1257,12 @@
         if (state.activeTab === 'lecturer' && !getActiveRoleSession('lecturer')) {
           populateGateLecturerCourses();
         }
+        if (state.activeTab === 'courserep' && !getActiveRoleSession('courserep')) {
+          populateGateCourseRepLevels();
+        }
         await loadHodEligibility();
         await renderIsolatedLecturerWorkspace();
+        renderIsolatedCourseRepWorkspace();
         renderSessionsList();
         if (state.activeTab === 'student' && getActiveRoleSession('student')) {
           lookupStudentDashboard();
@@ -1162,20 +1280,27 @@
         state.courses.map(c => `<option value="${c.id}">${c.course_code} - ${c.course_title} (${c.level}L • ${c.semester === 2 ? '2nd Sem' : '1st Sem'})</option>`).join('');
       hodCourseSel.value = prevCourse;
 
+      // For the Course Rep Kiosk, strictly lock sessions & students to the authenticated Course Rep's level!
+      const repSess = getActiveRoleSession('courserep');
+      const effectiveKioskLevel = repSess && repSess.level ? Number(repSess.level) : state.selectedLevel;
+
       const filteredSessions = state.sessions.filter(s => {
-        if (state.selectedLevel && s.level !== state.selectedLevel) return false;
+        if (effectiveKioskLevel && s.level !== effectiveKioskLevel) return false;
         if (state.selectedSemester && s.semester !== state.selectedSemester) return false;
         return true;
       });
       const sessionOptions = filteredSessions.map(s =>
-        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒'} ${s.course_code} (Wk ${s.week_number} • Taught by ${s.started_by}) - ${s.session_uid}</option>`
+        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒'} ${s.course_code} (${s.level}L • Wk ${s.week_number} • Taught by ${s.started_by}) - ${s.session_uid}</option>`
       ).join('');
-      document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || '<option value="">No sessions in this filter — start one in Lecturer tab</option>';
+      document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || `<option value="">No ${effectiveKioskLevel ? effectiveKioskLevel + 'L' : ''} sessions in this semester — start one in Lecturer tab</option>`;
       document.getElementById('studentSelfSessionSelect').innerHTML = sessionOptions || '<option value="">No active sessions</option>';
 
-      document.getElementById('kioskStudentSelect').innerHTML = state.students.map(st =>
+      const kioskStudents = effectiveKioskLevel
+        ? state.allDeptStudents.filter(st => st.level === effectiveKioskLevel)
+        : state.students;
+      document.getElementById('kioskStudentSelect').innerHTML = kioskStudents.map(st =>
         `<option value="${st.matric_no}">${st.matric_no} — ${st.full_name} (${st.level}L)</option>`
-      ).join('');
+      ).join('') || `<option value="">No ${effectiveKioskLevel || ''}L students enrolled yet — enroll on the right</option>`;
     }
 
     // =========================================================================
@@ -1636,8 +1761,123 @@
     }
 
     // =========================================================================
-    // COURSE REP BIOMETRIC KIOSK, CAMERA & OFFLINE SYNC
+    // ISOLATED LEVEL COURSE REP WORKSPACE, BIOMETRIC KIOSK & OFFLINE SYNC
     // =========================================================================
+    function renderIsolatedCourseRepWorkspace() {
+      const repSess = getActiveRoleSession('courserep');
+      if (!repSess || !repSess.level) return;
+
+      const lvl = Number(repSess.level);
+      const currDept = state.departments.find(d => d.id === state.selectedDeptId);
+      const deptText = currDept ? `${currDept.name} (${currDept.code})` : 'Engineering';
+      const repObj = state.courseReps.find(r => Number(r.level) === lvl) || {
+        full_name: repSess.rep_name || `${lvl}L Course Rep`,
+        matric_no: repSess.rep_matric || ''
+      };
+
+      document.getElementById('courseRepIsolatedBadge').textContent = `🔒 Isolated ${lvl} Level Course Rep Dashboard`;
+      document.getElementById('courseRepDeptPill').textContent = `${deptText} • ${lvl}L Registry`;
+      document.getElementById('courseRepHeading').textContent = `${lvl} Level Biometric Kiosk & Classmate Enrollment`;
+      document.getElementById('courseRepActiveName').textContent = `${repObj.full_name} (${repObj.matric_no || lvl + 'L'})`;
+      document.getElementById('courseRepLockedLevelLabel').textContent = `${lvl} Level`;
+      document.getElementById('kioskLevelTitle').textContent = `1. Classroom Biometric Attendance Kiosk (${lvl}L Only)`;
+      document.getElementById('enrollCardTitle').textContent = `2. Enroll ${lvl} Level Classmate Biometrics`;
+
+      const enrollLvlSel = document.getElementById('enrollLevel');
+      enrollLvlSel.innerHTML = `<option value="${lvl}" selected>🔒 ${lvl} Level</option>`;
+      document.getElementById('enrollRepName').value = `${repObj.full_name} (${lvl}L Course Rep)`;
+
+      // Render the isolated level classmates table at the bottom of the Course Rep portal
+      const levelStudents = state.allDeptStudents.filter(st => Number(st.level) === lvl);
+      const box = document.getElementById('courseRepLevelStudentsContainer');
+      const rowsHtml = levelStudents.map((st, idx) => `
+        <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition">
+          <td class="py-2.5 px-4 font-mono text-xs text-slate-400">${idx + 1}</td>
+          <td class="py-2.5 px-4 font-mono text-xs font-semibold text-white">${st.matric_no}</td>
+          <td class="py-2.5 px-4 text-sm text-slate-200">${st.full_name}</td>
+          <td class="py-2.5 px-4 font-mono text-xs text-slate-400">${st.email || '—'}</td>
+          <td class="py-2.5 px-4 text-xs font-mono text-emerald-400">✓ Face + Passkey Enrolled</td>
+          <td class="py-2.5 px-4 text-xs text-slate-400">${st.enrolled_by_rep || `${lvl}L Course Rep`}</td>
+        </tr>
+      `).join('');
+
+      box.innerHTML = `
+        <div class="glass rounded-2xl border border-slate-800 overflow-hidden">
+          <div class="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="font-display font-bold text-base sm:text-lg text-white">
+                🎓 ${lvl} Level Enrolled Classmates Registry (${deptText})
+              </h3>
+              <p class="text-xs text-slate-400">
+                Isolated to <b>${lvl} Level</b> only • Total Enrolled Classmates: <b class="text-emerald-400 font-mono">${levelStudents.length}</b>
+              </p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400 bg-slate-950/50">
+                  <th class="py-2.5 px-4">#</th>
+                  <th class="py-2.5 px-4">Matric No</th>
+                  <th class="py-2.5 px-4">Student Full Name</th>
+                  <th class="py-2.5 px-4">Institutional Email</th>
+                  <th class="py-2.5 px-4">Biometric Status</th>
+                  <th class="py-2.5 px-4">Enrolled By</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml || `<tr><td colspan="6" class="py-6 text-center text-xs text-slate-500">No ${lvl} Level students enrolled yet. Use the form above to enroll your ${lvl}L classmates.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function openEditCourseRepModal() {
+      const repSess = getActiveRoleSession('courserep');
+      if (!repSess) return;
+      const lvl = Number(repSess.level);
+      const repObj = state.courseReps.find(r => Number(r.level) === lvl) || {
+        full_name: repSess.rep_name || `${lvl}L Course Rep`,
+        matric_no: repSess.rep_matric || ''
+      };
+      document.getElementById('editCourseRepModalTitle').textContent = `Customize ${lvl} Level Course Rep Profile & PIN`;
+      document.getElementById('editCourseRepNameInput').value = repObj.full_name || '';
+      document.getElementById('editCourseRepMatricInput').value = repObj.matric_no || '';
+      document.getElementById('editCourseRepPinInput').value = '';
+      openModal('editCourseRepModal');
+    }
+
+    async function submitEditCourseRepProfile() {
+      const repSess = getActiveRoleSession('courserep');
+      if (!repSess) return;
+      const lvl = Number(repSess.level);
+      const full_name = document.getElementById('editCourseRepNameInput').value.trim();
+      const matric_no = document.getElementById('editCourseRepMatricInput').value.trim().toUpperCase();
+      const new_pin = document.getElementById('editCourseRepPinInput').value.trim();
+      if (!full_name) return showToast('Please enter the Level Course Rep Full Name', 'error');
+
+      const res = await fetch(`/api/course-reps/${state.selectedDeptId}/${lvl}`, {
+        method: 'PUT',
+        headers: authHeaders('courserep'),
+        body: JSON.stringify({ full_name, matric_no: matric_no || null, new_pin: new_pin || null })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Failed to update Course Rep profile', 'error');
+
+      repSess.rep_name = data.course_rep.full_name;
+      repSess.rep_matric = data.course_rep.matric_no;
+      repSess.actor_name = `${data.course_rep.full_name} (${lvl}L)`;
+      state.roleSessions['courserep'] = repSess;
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+
+      closeModal('editCourseRepModal');
+      showToast(data.message, 'success');
+      renderSecurityState();
+      await refreshAllData();
+    }
+
     async function startKioskCamera() {
       const video = document.getElementById('kioskVideo');
       const placeholder = document.getElementById('kioskCameraPlaceholder');
