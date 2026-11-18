@@ -1766,7 +1766,10 @@ PUBLIC_DIR = Path(__file__).resolve().parent.parent / "public"
 def serve_spa_root():
     index_file = PUBLIC_DIR / "index.html"
     if index_file.exists():
-        return index_file.read_text(encoding="utf-8")
+        return HTMLResponse(
+            content=index_file.read_text(encoding="utf-8"),
+            headers={"Permissions-Policy": "camera=(self)"}
+        )
     return "<h1>EngAttend API Active</h1>"
 
 

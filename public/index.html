@@ -456,7 +456,14 @@
               <button onclick="startKioskCamera()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-400 border border-emerald-500/30 transition">
                 Activate Phone Camera Sensor
               </button>
+              <div>
+                <input type="file" id="kioskPhotoInput" accept="image/*" capture="user" class="hidden" onchange="handleCameraPhotoFallback(event, 'kiosk')" />
+                <button type="button" onclick="document.getElementById('kioskPhotoInput').click()" class="text-[11px] text-teal-300 hover:underline font-medium">
+                  📸 Or Take / Upload Live Camera Photo
+                </button>
+              </div>
             </div>
+            <img id="kioskFallbackImg" class="hidden w-full h-full object-cover" alt="Kiosk Camera Photo" />
 
             <div class="scan-line pointer-events-none"></div>
             <div class="absolute top-3 left-3 px-2.5 py-1 rounded bg-slate-950/80 border border-slate-700 text-[11px] font-mono text-emerald-400">
@@ -504,7 +511,14 @@
                 <button type="button" onclick="startEnrollCamera()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-400 border border-emerald-500/30 transition">
                   📷 1. Activate Enrollment Camera
                 </button>
+                <div>
+                  <input type="file" id="enrollPhotoInput" accept="image/*" capture="user" class="hidden" onchange="handleCameraPhotoFallback(event, 'enroll')" />
+                  <button type="button" onclick="document.getElementById('enrollPhotoInput').click()" class="text-[11px] text-teal-300 hover:underline font-medium">
+                    📸 Or Take / Upload Camera Photo
+                  </button>
+                </div>
               </div>
+              <img id="enrollFallbackImg" class="hidden w-full h-full object-cover" alt="Enroll Camera Photo" />
 
               <div class="scan-line pointer-events-none"></div>
               <div id="enrollCaptureOverlay" class="absolute bottom-2.5 left-2.5 right-2.5 hidden px-3 py-1.5 rounded-xl bg-slate-950/90 border border-emerald-500/40 flex items-center justify-between gap-2">
@@ -638,7 +652,14 @@
                 <button type="button" onclick="startStudentCamera()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-400 border border-emerald-500/30 transition">
                   📷 1. Activate Live Classroom Camera
                 </button>
+                <div>
+                  <input type="file" id="studentPhotoInput" accept="image/*" capture="user" class="hidden" onchange="handleCameraPhotoFallback(event, 'student')" />
+                  <button type="button" onclick="document.getElementById('studentPhotoInput').click()" class="text-[11px] text-teal-300 hover:underline font-medium">
+                    📸 Or Take / Upload Live Camera Photo
+                  </button>
+                </div>
               </div>
+              <img id="studentFallbackImg" class="hidden w-full h-full object-cover" alt="Student Camera Photo" />
 
               <div class="scan-line pointer-events-none"></div>
               <div class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded bg-slate-950/80 border border-slate-700 text-[10px] font-mono text-emerald-400">
@@ -2007,25 +2028,120 @@
       return Math.sqrt(sum);
     }
 
-    async function extractLiveFace128DFromVideo(videoId, canvasId) {
+    function stopAllCameraStreams() {
+      ['enrollVideo', 'kioskVideo', 'studentVideo'].forEach(vid => {
+        const v = document.getElementById(vid);
+        if (v && v.srcObject) {
+          v.srcObject.getTracks().forEach(t => t.stop());
+          v.srcObject = null;
+        }
+      });
+    }
+
+    async function openCameraStream(videoId, placeholderId, fallbackImgId, successMsg) {
+      const video = document.getElementById(videoId);
+      const placeholder = document.getElementById(placeholderId);
+      const fallbackImg = document.getElementById(fallbackImgId);
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Browser blocked navigator.mediaDevices (use HTTPS in Chrome/Edge/Safari or click "Take / Upload Camera Photo").', 'error');
+        return;
+      }
+
+      try {
+        ensureFaceModelsLoaded();
+        stopAllCameraStreams();
+
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
+          });
+        } catch (constraintErr) {
+          if (constraintErr.name === 'OverconstrainedError' || constraintErr.name === 'NotFoundError' || constraintErr.name === 'AbortError') {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          } else {
+            throw constraintErr;
+          }
+        }
+
+        if (fallbackImg) fallbackImg.classList.add('hidden');
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        await video.play().catch(() => {});
+        showToast(successMsg, 'success');
+      } catch (err) {
+        const errName = err && err.name ? err.name : 'Error';
+        const errMsg = err && err.message ? err.message : 'Camera blocked';
+        if (errName === 'NotAllowedError' || errName === 'SecurityError') {
+          showToast(`Browser/WebView blocked live camera (${errName}: ${errMsg}). Allow Camera in browser site settings, open in Chrome/Edge, or click "📸 Or Take / Upload Camera Photo".`, 'error');
+        } else if (errName === 'NotReadableError') {
+          showToast(`Camera is currently in use by another app or tab (${errName}). Close other camera apps or use "📸 Or Take / Upload Camera Photo".`, 'error');
+        } else {
+          showToast(`Camera error (${errName}: ${errMsg}). Try "📸 Or Take / Upload Camera Photo" below.`, 'error');
+        }
+      }
+    }
+
+    function handleCameraPhotoFallback(event, target) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      ensureFaceModelsLoaded();
+      const reader = new FileReader();
+      reader.onload = e => {
+        const imgId = target === 'enroll' ? 'enrollFallbackImg' : (target === 'kiosk' ? 'kioskFallbackImg' : 'studentFallbackImg');
+        const videoId = target === 'enroll' ? 'enrollVideo' : (target === 'kiosk' ? 'kioskVideo' : 'studentVideo');
+        const phId = target === 'enroll' ? 'enrollCameraPlaceholder' : (target === 'kiosk' ? 'kioskCameraPlaceholder' : 'studentCameraPlaceholder');
+
+        const img = document.getElementById(imgId);
+        const video = document.getElementById(videoId);
+        const ph = document.getElementById(phId);
+        stopAllCameraStreams();
+        if (video) video.classList.add('hidden');
+        if (ph) ph.classList.add('hidden');
+        img.onload = () => {
+          showToast('Camera photo loaded! Click the Capture / Scan Face button to extract 128D biometrics.', 'success');
+        };
+        img.src = e.target.result;
+        img.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function extractLiveFace128DFromVideo(videoId, canvasId, fallbackImgId) {
       const video = document.getElementById(videoId);
       const canvas = document.getElementById(canvasId);
-      if (!video || !video.srcObject || video.classList.contains('hidden') || video.readyState < 2) {
-        throw new Error('Camera is not active! Please click "Activate Camera" first so the system can see your live face.');
+      const fallbackImg = fallbackImgId ? document.getElementById(fallbackImgId) : null;
+
+      let sourceEl = null;
+      let srcWidth = 0;
+      let srcHeight = 0;
+
+      if (video && video.srcObject && !video.classList.contains('hidden') && video.readyState >= 2) {
+        sourceEl = video;
+        srcWidth = video.videoWidth || 640;
+        srcHeight = video.videoHeight || 480;
+      } else if (fallbackImg && !fallbackImg.classList.contains('hidden') && fallbackImg.complete && fallbackImg.naturalWidth > 0) {
+        sourceEl = fallbackImg;
+        srcWidth = fallbackImg.naturalWidth;
+        srcHeight = fallbackImg.naturalHeight;
+      } else {
+        throw new Error('Camera is not active! Click "Activate Camera" or "📸 Take / Upload Camera Photo" first.');
       }
 
       const modelsReady = await ensureFaceModelsLoaded();
       if (modelsReady && typeof faceapi !== 'undefined') {
         const detection = await faceapi
-          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.42 }))
+          .detectSingleFace(sourceEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.42 }))
           .withFaceLandmarks()
           .withFaceDescriptor();
 
         if (!detection) {
-          throw new Error('No human face detected in front of the camera! Please look directly into the camera lens with clear lighting.');
+          throw new Error('No human face detected! Please look directly into the camera lens with clear lighting.');
         }
 
-        // Crop a 96x96 reference thumbnail of the detected face box
         const box = detection.detection.box;
         const thumbCanvas = document.createElement('canvas');
         thumbCanvas.width = 96;
@@ -2034,9 +2150,9 @@
         const pad = Math.max(box.width, box.height) * 0.2;
         const sx = Math.max(0, box.x - pad);
         const sy = Math.max(0, box.y - pad);
-        const sw = Math.min(video.videoWidth - sx, box.width + pad * 2);
-        const sh = Math.min(video.videoHeight - sy, box.height + pad * 2);
-        tCtx.drawImage(video, sx, sy, sw, sh, 0, 0, 96, 96);
+        const sw = Math.min(srcWidth - sx, box.width + pad * 2);
+        const sh = Math.min(srcHeight - sy, box.height + pad * 2);
+        tCtx.drawImage(sourceEl, sx, sy, sw, sh, 0, 0, 96, 96);
         const photoB64 = thumbCanvas.toDataURL('image/jpeg', 0.78);
 
         const descriptor128 = Array.from(detection.descriptor).map(v => Number(v.toFixed(6)));
@@ -2047,7 +2163,7 @@
       const ctx = canvas.getContext('2d');
       canvas.width = 128;
       canvas.height = 128;
-      ctx.drawImage(video, 0, 0, 128, 128);
+      ctx.drawImage(sourceEl, 0, 0, 128, 128);
       const imgData = ctx.getImageData(16, 16, 96, 96).data;
       let vec = new Array(128).fill(0);
       let pixelVariance = 0;
@@ -2074,21 +2190,12 @@
     }
 
     async function startEnrollCamera() {
-      const video = document.getElementById('enrollVideo');
-      const placeholder = document.getElementById('enrollCameraPlaceholder');
-      try {
-        ensureFaceModelsLoaded();
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false
-        });
-        video.srcObject = stream;
-        video.classList.remove('hidden');
-        placeholder.classList.add('hidden');
-        showToast('Enrollment Camera Active! Position student face in frame and click "2. Capture Live Face".');
-      } catch (err) {
-        showToast('Camera permission denied or unavailable. Please allow camera access in your browser.', 'error');
-      }
+      await openCameraStream(
+        'enrollVideo',
+        'enrollCameraPlaceholder',
+        'enrollFallbackImg',
+        'Enrollment Camera Active! Position student face in frame and click "2. Capture Live Face".'
+      );
     }
 
     async function captureEnrollmentFaceSnapshot() {
@@ -2098,7 +2205,7 @@
           btn.disabled = true;
           btn.textContent = 'Scanning 68 Landmarks...';
         }
-        const { descriptor, photoB64 } = await extractLiveFace128DFromVideo('enrollVideo', 'enrollCanvas');
+        const { descriptor, photoB64 } = await extractLiveFace128DFromVideo('enrollVideo', 'enrollCanvas', 'enrollFallbackImg');
         state.pendingEnrollDescriptor = descriptor;
         state.pendingEnrollPhotoB64 = photoB64;
 
@@ -2117,39 +2224,21 @@
     }
 
     async function startKioskCamera() {
-      const video = document.getElementById('kioskVideo');
-      const placeholder = document.getElementById('kioskCameraPlaceholder');
-      try {
-        ensureFaceModelsLoaded();
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false
-        });
-        video.srcObject = stream;
-        video.classList.remove('hidden');
-        placeholder.classList.add('hidden');
-        showToast('Classroom Kiosk Camera Active! Ready for 128D live facial verification.');
-      } catch (err) {
-        showToast('Camera permission denied! Live camera is required for biometric verification.', 'error');
-      }
+      await openCameraStream(
+        'kioskVideo',
+        'kioskCameraPlaceholder',
+        'kioskFallbackImg',
+        'Classroom Kiosk Camera Active! Ready for 128D live facial verification.'
+      );
     }
 
     async function startStudentCamera() {
-      const video = document.getElementById('studentVideo');
-      const placeholder = document.getElementById('studentCameraPlaceholder');
-      try {
-        ensureFaceModelsLoaded();
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false
-        });
-        video.srcObject = stream;
-        video.classList.remove('hidden');
-        placeholder.classList.add('hidden');
-        showToast('Live Classroom Camera Active! Look at the camera and click "2. Scan Live Face on Camera".');
-      } catch (err) {
-        showToast('Camera permission denied! You must allow camera access to verify your face in class.', 'error');
-      }
+      await openCameraStream(
+        'studentVideo',
+        'studentCameraPlaceholder',
+        'studentFallbackImg',
+        'Live Classroom Camera Active! Look at the camera and click "2. Scan Live Face on Camera".'
+      );
     }
 
     function cacheDepartmentTemplatesOffline() {
@@ -2167,7 +2256,7 @@
 
       let liveCapture;
       try {
-        liveCapture = await extractLiveFace128DFromVideo('kioskVideo', 'kioskCanvas');
+        liveCapture = await extractLiveFace128DFromVideo('kioskVideo', 'kioskCanvas', 'kioskFallbackImg');
       } catch (camErr) {
         return showToast(camErr.message, 'error');
       }
@@ -2368,7 +2457,7 @@
           btn.disabled = true;
           btn.innerHTML = '<span>🔍</span> Verifying 68 Landmarks &amp; 128D Face...';
         }
-        liveCapture = await extractLiveFace128DFromVideo('studentVideo', 'studentCanvas');
+        liveCapture = await extractLiveFace128DFromVideo('studentVideo', 'studentCanvas', 'studentFallbackImg');
       } catch (camErr) {
         if (btn) {
           btn.disabled = false;
