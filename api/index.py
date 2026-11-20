@@ -1208,11 +1208,29 @@ def enroll_student_biometrics(
         )
 
     face_vec = payload.face_descriptor
-    if not face_vec or len(face_vec) < 64:
+    if not face_vec or len(face_vec) != 128:
         raise HTTPException(
             status_code=400,
-            detail="Mandatory Live Face Capture Required: Please activate the Enrollment Camera and capture the student's face before enrolling."
+            detail="Mandatory 128D Neural Face KYC Required: Please activate the Enrollment Camera and capture the student's live 128D facial signature before enrolling."
         )
+
+    # 1:N Duplicate Face KYC Check: Ensure this face is not already registered to a different Matric Number
+    other_students = db.query(Student).filter(Student.matric_no != matric, Student.face_descriptor_json.isnot(None)).all()
+    for other in other_students:
+        try:
+            other_vec = json.loads(other.face_descriptor_json)
+            if other_vec and len(other_vec) == 128:
+                d_other = compute_euclidean_distance(face_vec, other_vec)
+                s_other = compute_cosine_similarity(face_vec, other_vec)
+                if d_other <= 0.42 or s_other >= 0.91:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Duplicate Biometric Face Block: This face is already enrolled under {other.full_name} ({other.matric_no}) [L2: {d_other:.3f}]. One person cannot register for multiple Matric Numbers."
+                    )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
 
     student = db.query(Student).filter(Student.matric_no == matric).first()
 
@@ -1441,34 +1459,49 @@ def _process_single_checkin(
             detail=f"Student {matric} has not enrolled their facial biometrics with the Level Course Rep yet."
         )
 
-    if not item.face_descriptor or len(item.face_descriptor) < 64:
+    if not item.face_descriptor or len(item.face_descriptor) != 128:
         raise HTTPException(
             status_code=400,
-            detail="Live Camera Facial Verification Required: You must scan your live face on camera during the session to prove physical presence."
+            detail="Live 128D Neural Face Verification Required: You must verify your live face on your phone camera during the session to prove physical presence."
         )
 
     stored_vec = json.loads(student.face_descriptor_json)
-    confidence = 0.98
-    euclidean_dist = 0.0
+    if not stored_vec or len(stored_vec) != 128:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Master 128D Face KYC Not Enrolled for {student.full_name} ({student.matric_no}): Please meet your Level Course Rep to capture your master face biometrics first."
+        )
 
-    if len(stored_vec) != len(item.face_descriptor):
-        # Upgrade legacy 32D demo record to the student's first real 128D neural face capture, then lock it permanently
-        student.face_descriptor_json = json.dumps(item.face_descriptor)
-        if item.face_photo_b64 and not student.face_photo_b64:
-            student.face_photo_b64 = item.face_photo_b64
-        student.biometric_enrolled_at = datetime.now(timezone.utc)
-        db.flush()
-        confidence = 0.99
-    else:
-        euclidean_dist = compute_euclidean_distance(item.face_descriptor, stored_vec)
-        sim = compute_cosine_similarity(item.face_descriptor, stored_vec)
-        # Standard dlib / ResNet-34 128D face_recognition threshold: Euclidean distance <= 0.56 and Cosine Similarity >= 0.80
-        if euclidean_dist > 0.56 or sim < 0.80:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Biometric Face Mismatch! The live face on camera does not match {student.full_name} ({student.matric_no}) [L2 Distance: {euclidean_dist:.3f} > 0.56, Cosine: {sim*100:.1f}%]. Impersonation blocked."
-            )
-        confidence = round(max(sim, min(0.998, 1.0 - (euclidean_dist * 0.45))), 4)
+    euclidean_dist = compute_euclidean_distance(item.face_descriptor, stored_vec)
+    sim = compute_cosine_similarity(item.face_descriptor, stored_vec)
+
+    # 1:N Impersonation Cross-Check: Check if the live face on camera actually belongs to a different enrolled classmate
+    other_students = db.query(Student).filter(
+        Student.id != student.id,
+        Student.face_descriptor_json.isnot(None)
+    ).all()
+    for other in other_students:
+        try:
+            o_vec = json.loads(other.face_descriptor_json)
+            if o_vec and len(o_vec) == 128:
+                o_dist = compute_euclidean_distance(item.face_descriptor, o_vec)
+                if o_dist < euclidean_dist and o_dist <= 0.44:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Impersonation Alert! The live face on camera matches {other.full_name} ({other.matric_no}), NOT {student.full_name} ({student.matric_no})! Attendance blocked."
+                    )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    # Strict OPay / Moniepoint KYC 1:1 Threshold: L2 Euclidean Distance <= 0.42 AND Cosine Similarity >= 0.905 (90.5%)
+    if euclidean_dist > 0.42 or sim < 0.905:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Biometric Face Mismatch! The live face on camera does not match the enrolled KYC face for {student.full_name} ({student.matric_no}) [L2 Distance: {euclidean_dist:.3f} > 0.42 max, Similarity: {sim*100:.1f}% < 90.5% min]. Impersonation blocked."
+        )
+    confidence = round(max(sim, min(0.998, 1.0 - (euclidean_dist * 0.45))), 4)
 
     existing = db.query(AttendanceRecord).filter(
         AttendanceRecord.session_id == sess.id,
