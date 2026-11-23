@@ -133,10 +133,14 @@ class LectureSession(Base):
     topic = Column(String(200), nullable=False)
     week_number = Column(Integer, default=1)
     started_by = Column(String(120), nullable=False)
-    status = Column(String(20), default="ACTIVE")                       # ACTIVE, CLOSED
+    status = Column(String(20), default="ACTIVE")                       # ACTIVE, CLOSED (Immutable once CLOSED)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    session_secret = Column(String(64), nullable=False)
+    geofence_radius_m = Column(Float, default=150.0)
+    session_secret = Column(String(64), nullable=False)                 # 4-digit Classroom Attendance PIN
+    pin_generation_count = Column(Integer, default=1)                   # Max 5 generations (2 mins each = 10 mins total)
+    pin_expires_at = Column(DateTime, nullable=True)                    # Current 2-minute PIN expiry
+    session_hard_expires_at = Column(DateTime, nullable=True)           # Absolute 10-minute attendance window
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     closed_at = Column(DateTime, nullable=True)
 
@@ -224,6 +228,79 @@ def compute_euclidean_distance(vec_a: List[float], vec_b: List[float]) -> float:
     return math.sqrt(sum((a - b) ** 2 for a, b in zip(vec_a, vec_b)))
 
 
+def generate_4digit_classroom_pin() -> str:
+    """Generates a cryptographically random 4-digit Classroom Attendance PIN (1000-9999)."""
+    return f"{secrets.randbelow(9000) + 1000:04d}"
+
+
+def compute_haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Computes physical great-circle distance in meters between two GPS coordinates (Lecturer vs Student)."""
+    r = 6371000.0  # Earth mean radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * (math.sin(dlambda / 2.0) ** 2)
+    return 2.0 * r * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+
+
+def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def sync_session_lifecycle(sess: LectureSession, db: Session) -> Dict[str, Any]:
+    """
+    Enforces Layer 1 & Layer 3 rules:
+    - Each 4-digit PIN expires after 2 minutes (120 seconds).
+    - Up to 5 generations maximum (5 x 2 mins = 10 minutes total attendance window).
+    - Once the 10-minute total attendance window elapses (or 5th PIN expires), the session
+      automatically transitions to CLOSED and is permanently locked.
+    """
+    now = datetime.now(timezone.utc)
+    created = ensure_utc(sess.created_at) or now
+    hard_exp = ensure_utc(sess.session_hard_expires_at) or (created + timedelta(minutes=10))
+    pin_exp = ensure_utc(sess.pin_expires_at) or (created + timedelta(minutes=2))
+    gen_count = sess.pin_generation_count or 1
+
+    changed = False
+    if sess.session_hard_expires_at is None:
+        sess.session_hard_expires_at = hard_exp
+        changed = True
+    if sess.pin_expires_at is None:
+        sess.pin_expires_at = pin_exp
+        changed = True
+
+    if sess.status == "ACTIVE":
+        # Check if absolute 10-minute attendance window has elapsed, or if 5th PIN generation has expired
+        if now >= hard_exp or (now >= pin_exp and gen_count >= 5):
+            sess.status = "CLOSED"
+            sess.closed_at = now
+            changed = True
+
+    if changed:
+        db.commit()
+        db.refresh(sess)
+
+    pin_rem_sec = max(0, int((pin_exp - now).total_seconds())) if sess.status == "ACTIVE" else 0
+    total_rem_sec = max(0, int((hard_exp - now).total_seconds())) if sess.status == "ACTIVE" else 0
+    pin_is_expired = (sess.status == "ACTIVE") and (pin_rem_sec <= 0)
+
+    return {
+        "pin_generation_count": gen_count,
+        "max_pin_generations": 5,
+        "generations_remaining": max(0, 5 - gen_count) if sess.status == "ACTIVE" else 0,
+        "pin_remaining_seconds": pin_rem_sec,
+        "total_remaining_seconds": total_rem_sec,
+        "pin_is_expired": pin_is_expired,
+        "pin_expires_at": pin_exp.isoformat(),
+        "session_hard_expires_at": hard_exp.isoformat(),
+    }
+
+
 def generate_deterministic_signature(seed_text: str, dims: int = 32) -> List[float]:
     vals = []
     for i in range(dims):
@@ -283,29 +360,25 @@ def deduplicate_courses_in_db(db: Session):
 
 
 def run_schema_migrations():
-    """Safely adds `semester` and `face_photo_b64` columns to existing Supabase PostgreSQL tables."""
+    """Safely adds new columns to existing Supabase PostgreSQL & SQLite tables."""
     with engine.begin() as conn:
-        try:
-            conn.execute(text("ALTER TABLE courses ADD COLUMN IF NOT EXISTS semester INTEGER DEFAULT 1 NOT NULL"))
-        except Exception:
+        migrations = [
+            "ALTER TABLE courses ADD COLUMN IF NOT EXISTS semester INTEGER DEFAULT 1 NOT NULL",
+            "ALTER TABLE lecture_sessions ADD COLUMN IF NOT EXISTS semester INTEGER DEFAULT 1 NOT NULL",
+            "ALTER TABLE students ADD COLUMN IF NOT EXISTS face_photo_b64 TEXT",
+            "ALTER TABLE lecture_sessions ADD COLUMN IF NOT EXISTS geofence_radius_m FLOAT DEFAULT 150.0",
+            "ALTER TABLE lecture_sessions ADD COLUMN IF NOT EXISTS pin_generation_count INTEGER DEFAULT 1",
+            "ALTER TABLE lecture_sessions ADD COLUMN IF NOT EXISTS pin_expires_at TIMESTAMP",
+            "ALTER TABLE lecture_sessions ADD COLUMN IF NOT EXISTS session_hard_expires_at TIMESTAMP",
+        ]
+        for sql in migrations:
             try:
-                conn.execute(text("ALTER TABLE courses ADD COLUMN semester INTEGER DEFAULT 1 NOT NULL"))
+                conn.execute(text(sql))
             except Exception:
-                pass
-        try:
-            conn.execute(text("ALTER TABLE lecture_sessions ADD COLUMN IF NOT EXISTS semester INTEGER DEFAULT 1 NOT NULL"))
-        except Exception:
-            try:
-                conn.execute(text("ALTER TABLE lecture_sessions ADD COLUMN semester INTEGER DEFAULT 1 NOT NULL"))
-            except Exception:
-                pass
-        try:
-            conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS face_photo_b64 TEXT"))
-        except Exception:
-            try:
-                conn.execute(text("ALTER TABLE students ADD COLUMN face_photo_b64 TEXT"))
-            except Exception:
-                pass
+                try:
+                    conn.execute(text(sql.replace(" IF NOT EXISTS", "")))
+                except Exception:
+                    pass
 
 
 def init_and_seed_db():
@@ -570,11 +643,16 @@ class SessionCreateRequest(BaseModel):
     pin: str = "1234"
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    geofence_radius_m: float = 150.0
 
 
 class BiometricCheckInRequest(BaseModel):
     session_uid: str
     matric_no: str
+    classroom_pin: Optional[str] = Field(default=None, description="4-digit Classroom Attendance PIN called out by the Course Lecturer")
+    latitude: Optional[float] = Field(default=None, description="Student live phone GPS latitude")
+    longitude: Optional[float] = Field(default=None, description="Student live phone GPS longitude")
+    gps_accuracy_m: Optional[float] = Field(default=None, description="Student phone GPS accuracy in meters")
     verification_method: str = "FACE_BIOMETRIC_KIOSK"
     face_descriptor: Optional[List[float]] = None
     face_photo_b64: Optional[str] = None
@@ -1313,6 +1391,12 @@ def start_lecture_session(
         requested_lecturer = assigned_list[0]
 
     uid = f"SESS-{course.course_code.replace(' ', '')}-W{payload.week_number}-{secrets.token_hex(3).upper()}"
+    now = datetime.now(timezone.utc)
+    pin_4digit = generate_4digit_classroom_pin()
+    pin_exp = now + timedelta(minutes=2)
+    hard_exp = now + timedelta(minutes=10)
+    radius_m = max(30.0, min(1000.0, float(payload.geofence_radius_m or 150.0)))
+
     sess = LectureSession(
         session_uid=uid,
         course_id=course.id,
@@ -1325,13 +1409,18 @@ def start_lecture_session(
         status="ACTIVE",
         latitude=payload.latitude,
         longitude=payload.longitude,
-        session_secret=secrets.token_hex(8),
+        geofence_radius_m=radius_m,
+        session_secret=pin_4digit,
+        pin_generation_count=1,
+        pin_expires_at=pin_exp,
+        session_hard_expires_at=hard_exp,
+        created_at=now,
     )
     db.add(sess)
     db.commit()
     db.refresh(sess)
     return {
-        "message": f"Live session launched for {course.course_code} — Taught by {sess.started_by}",
+        "message": f"Live session launched for {course.course_code} — Classroom PIN #{1}/5: {pin_4digit} (Expires in 2 mins; Total window: 10 mins)",
         "session": {
             "id": sess.id,
             "session_uid": sess.session_uid,
@@ -1344,6 +1433,15 @@ def start_lecture_session(
             "week_number": sess.week_number,
             "started_by": sess.started_by,
             "status": sess.status,
+            "classroom_pin": sess.session_secret,
+            "pin_generation_count": sess.pin_generation_count,
+            "max_pin_generations": 5,
+            "pin_expires_at": pin_exp.isoformat(),
+            "session_hard_expires_at": hard_exp.isoformat(),
+            "has_geofence": bool(sess.latitude is not None and sess.longitude is not None),
+            "latitude": sess.latitude,
+            "longitude": sess.longitude,
+            "geofence_radius_m": sess.geofence_radius_m,
             "created_at": sess.created_at.isoformat(),
         },
     }
@@ -1356,8 +1454,19 @@ def list_sessions(
     course_id: Optional[int] = Query(None),
     level: Optional[int] = Query(None),
     semester: Optional[int] = Query(None),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
+    caller_claims: Dict[str, Any] = {}
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            caller_claims = jwt.decode(authorization.split(" ", 1)[1].strip(), JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        except Exception:
+            caller_claims = {}
+
+    caller_role = caller_claims.get("role")
+    caller_course_id = caller_claims.get("course_id")
+
     q = db.query(LectureSession)
     if department_id:
         q = q.filter(LectureSession.department_id == department_id)
@@ -1371,11 +1480,23 @@ def list_sessions(
 
     out = []
     for s in sessions:
+        lifecycle = sync_session_lifecycle(s, db)
         course = db.query(Course).filter(Course.id == s.course_id).first()
         present_count = db.query(AttendanceRecord).filter(AttendanceRecord.session_id == s.id).count()
         total_level_students = db.query(Student).filter(
             Student.department_id == s.department_id, Student.level == s.level
         ).count()
+
+        # Only expose the 4-digit classroom_pin to the authenticated Course Lecturer of that course (or HOD)
+        can_view_pin = (
+            s.status == "ACTIVE"
+            and (
+                caller_role == "hod"
+                or (caller_role == "lecturer" and caller_course_id == s.course_id)
+            )
+        )
+        pin_4d = s.session_secret if (s.session_secret and len(s.session_secret) == 4 and s.session_secret.isdigit()) else None
+
         out.append({
             "id": s.id,
             "session_uid": s.session_uid,
@@ -1390,9 +1511,82 @@ def list_sessions(
             "status": s.status,
             "present_count": present_count,
             "total_class_size": total_level_students,
+            "classroom_pin": pin_4d if can_view_pin else None,
+            "pin_generation_count": lifecycle["pin_generation_count"],
+            "max_pin_generations": lifecycle["max_pin_generations"],
+            "generations_remaining": lifecycle["generations_remaining"],
+            "pin_remaining_seconds": lifecycle["pin_remaining_seconds"],
+            "total_remaining_seconds": lifecycle["total_remaining_seconds"],
+            "pin_is_expired": lifecycle["pin_is_expired"],
+            "pin_expires_at": lifecycle["pin_expires_at"],
+            "session_hard_expires_at": lifecycle["session_hard_expires_at"],
+            "has_geofence": bool(s.latitude is not None and s.longitude is not None),
+            "geofence_radius_m": s.geofence_radius_m or 150.0,
             "created_at": s.created_at.isoformat() if s.created_at else None,
+            "closed_at": s.closed_at.isoformat() if s.closed_at else None,
         })
     return out
+
+
+@router.post("/sessions/{session_uid}/regenerate-pin")
+@router.post("/api/sessions/{session_uid}/regenerate-pin")
+def regenerate_classroom_pin(
+    session_uid: str,
+    claims: Dict[str, Any] = Depends(verify_access_token),
+    db: Session = Depends(get_db),
+):
+    role = claims.get("role")
+    if role not in ("lecturer", "hod"):
+        raise HTTPException(status_code=403, detail="Only an authenticated Course Lecturer or HOD can generate the 4-digit Classroom PIN.")
+    sess = db.query(LectureSession).filter(LectureSession.session_uid == session_uid).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    if role == "lecturer" and claims.get("course_id") and claims.get("course_id") != sess.course_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Strict Course Isolation: You cannot generate a Classroom PIN for another course's session."
+        )
+
+    lifecycle = sync_session_lifecycle(sess, db)
+    if sess.status != "ACTIVE":
+        raise HTTPException(
+            status_code=403,
+            detail="Immutable Session Lock (Layer 3): This session has already been locked/closed inside the classroom and can NEVER be reopened."
+        )
+
+    current_gen = sess.pin_generation_count or 1
+    if current_gen >= 5:
+        raise HTTPException(
+            status_code=403,
+            detail="Maximum 5 PIN Generations Reached (5 x 2 mins = 10 mins total attendance limit). No more PINs can be generated for this session."
+        )
+
+    now = datetime.now(timezone.utc)
+    hard_exp = ensure_utc(sess.session_hard_expires_at) or (now + timedelta(minutes=2))
+    new_pin = generate_4digit_classroom_pin()
+    # Ensure new PIN differs from previous PIN
+    while new_pin == sess.session_secret:
+        new_pin = generate_4digit_classroom_pin()
+
+    sess.session_secret = new_pin
+    sess.pin_generation_count = current_gen + 1
+    # Each PIN lasts 2 minutes, capped at the absolute 10-minute session hard expiry
+    next_pin_exp = min(now + timedelta(minutes=2), hard_exp)
+    sess.pin_expires_at = next_pin_exp
+    db.commit()
+    db.refresh(sess)
+
+    updated = sync_session_lifecycle(sess, db)
+    return {
+        "message": f"New 4-Digit Classroom PIN Generated (#{sess.pin_generation_count} of 5): {new_pin} — Call out to students in class (Valid for 2 minutes)!",
+        "classroom_pin": new_pin,
+        "pin_generation_count": sess.pin_generation_count,
+        "max_pin_generations": 5,
+        "generations_remaining": updated["generations_remaining"],
+        "pin_remaining_seconds": updated["pin_remaining_seconds"],
+        "total_remaining_seconds": updated["total_remaining_seconds"],
+    }
 
 
 @router.post("/sessions/{session_uid}/close")
@@ -1415,10 +1609,23 @@ def close_session(
             detail="Strict Course Isolation: You cannot lock or modify a session belonging to another course."
         )
 
+    if sess.status == "CLOSED":
+        return {"message": f"Session {session_uid} is already permanently locked and cannot be modified."}
+
     sess.status = "CLOSED"
     sess.closed_at = datetime.now(timezone.utc)
     db.commit()
-    return {"message": f"Session {session_uid} (Taught by {sess.started_by}) closed and locked for HOD reporting."}
+    return {"message": f"Session {session_uid} (Taught by {sess.started_by}) permanently closed and locked inside classroom. It can never be reopened."}
+
+
+@router.post("/sessions/{session_uid}/reopen")
+@router.post("/api/sessions/{session_uid}/reopen")
+def reopen_session_forbidden(session_uid: str):
+    """Layer 3 Anti-Favoritism Guard: Explicitly rejects any attempt to reopen a closed lecture session."""
+    raise HTTPException(
+        status_code=403,
+        detail="Layer 3 Anti-Backdoor Policy: Once a class attendance session is locked inside the classroom, it is permanently sealed and can NEVER be reopened after class."
+    )
 
 
 def _process_single_checkin(
@@ -1431,6 +1638,16 @@ def _process_single_checkin(
     if not sess:
         raise HTTPException(status_code=404, detail=f"Session {item.session_uid} not found.")
 
+    # Enforce Layer 1 & Layer 3 lifecycle (2-min PIN expiry, 10-min hard window, permanent lock)
+    lifecycle = sync_session_lifecycle(sess, db)
+
+    # LAYER 3 — Permanent Classroom Session Lock Check
+    if sess.status != "ACTIVE":
+        raise HTTPException(
+            status_code=403,
+            detail="Layer 3 Session Lock: This class session has been locked inside the classroom (or its 10-minute attendance window has ended) and can no longer accept attendance."
+        )
+
     if allowed_course_id is not None and sess.course_id != allowed_course_id:
         raise HTTPException(
             status_code=403,
@@ -1441,6 +1658,51 @@ def _process_single_checkin(
             status_code=403,
             detail=f"Strict Level Isolation: You are signed in as the {allowed_level}L Course Rep and cannot record attendance for a {sess.level}L session."
         )
+
+    # LAYER 1 — 4-Digit Rotating Classroom PIN Verification (2 mins per PIN, max 5 generations = 10 mins)
+    submitted_pin = (item.classroom_pin or "").strip()
+    if not submitted_pin:
+        raise HTTPException(
+            status_code=400,
+            detail="Layer 1 Classroom PIN Required: Enter the 4-digit Classroom Attendance PIN called out by your Course Lecturer inside the lecture hall."
+        )
+    if lifecycle["pin_is_expired"]:
+        if lifecycle["generations_remaining"] > 0:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Layer 1 Classroom PIN Expired (2-minute limit elapsed)! Ask your Course Lecturer to generate the next 4-digit PIN (#{(sess.pin_generation_count or 1) + 1} of 5)."
+            )
+        else:
+            sess.status = "CLOSED"
+            sess.closed_at = datetime.now(timezone.utc)
+            db.commit()
+            raise HTTPException(
+                status_code=403,
+                detail="Attendance Window Closed: All 5 PIN generations (10 minutes total) have expired and the session is now permanently locked."
+            )
+    if submitted_pin != sess.session_secret:
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid 4-Digit Classroom PIN! The code you entered does not match the live PIN displayed on the Course Lecturer's dashboard."
+        )
+
+    # LAYER 2 — Classroom GPS Geofencing Verification
+    distance_from_class_m: Optional[float] = None
+    if sess.latitude is not None and sess.longitude is not None:
+        if item.latitude is None or item.longitude is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Layer 2 Classroom GPS Geofence Required: You must allow Location/GPS access on your phone to prove you are physically inside the lecture hall (not at home)."
+            )
+        distance_from_class_m = round(
+            compute_haversine_meters(sess.latitude, sess.longitude, item.latitude, item.longitude), 1
+        )
+        allowed_radius_m = float(sess.geofence_radius_m or 150.0)
+        if distance_from_class_m > allowed_radius_m:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Layer 2 GPS Geofence Violation: You are {distance_from_class_m:.0f}m away from the lecture hall (maximum allowed radius: {allowed_radius_m:.0f}m). Remote attendance from home/hostel is blocked!"
+            )
 
     matric = item.matric_no.strip().upper()
     student = db.query(Student).filter(Student.matric_no == matric).first()
@@ -1537,6 +1799,8 @@ def _process_single_checkin(
         "verification_method": item.verification_method,
         "confidence_score": confidence,
         "euclidean_distance": round(euclidean_dist, 4),
+        "distance_from_class_m": distance_from_class_m,
+        "pin_generation_used": sess.pin_generation_count or 1,
         "captured_offline": item.captured_offline,
         "lecturer_on_duty": sess.started_by,
         "session_uid": sess.session_uid,
@@ -1801,7 +2065,7 @@ def serve_spa_root():
     if index_file.exists():
         return HTMLResponse(
             content=index_file.read_text(encoding="utf-8"),
-            headers={"Permissions-Policy": "camera=(self)"}
+            headers={"Permissions-Policy": "camera=(self), geolocation=(self)"}
         )
     return "<h1>EngAttend API Active</h1>"
 

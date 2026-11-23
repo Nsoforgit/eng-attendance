@@ -357,8 +357,21 @@
               <label class="block text-xs text-slate-400 mb-1">Lecture Topic Taught Today</label>
               <input type="text" id="sessionTopicInput" placeholder="e.g. Week 6: Pressure Transient Analysis & Well Testing" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
-            <button onclick="createNewLectureSession()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
-              🚀 Launch Session Under My Name
+            <div class="p-3 rounded-xl bg-slate-950/90 border border-teal-500/30 space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs font-semibold text-teal-300">📍 Layer 2: Classroom GPS Geofence Radius</label>
+                <select id="sessionGeofenceRadius" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-emerald-300">
+                  <option value="100">100m (Lecture Room)</option>
+                  <option value="150" selected>150m (Hall + Corridor)</option>
+                  <option value="250">250m (Faculty Complex)</option>
+                </select>
+              </div>
+              <p class="text-[11px] text-slate-400">
+                Locks session to your live lecture hall GPS coordinates + generates <b>4-Digit PIN #1 of 5</b> (2 mins per PIN • 10 mins max window).
+              </p>
+            </div>
+            <button id="launchSessionBtn" onclick="createNewLectureSession()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+              🚀 Launch Session &amp; Generate 4-Digit PIN (#1/5)
             </button>
           </div>
         </div>
@@ -565,12 +578,22 @@
 
           <div class="space-y-3">
             <div>
-              <label class="block text-xs text-slate-400 mb-1">Active Class Session (Your Level)</label>
+              <label class="block text-xs text-slate-400 mb-1">Active Class Session (Only Live Unlocked Sessions)</label>
               <select id="studentSelfSessionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"></select>
             </div>
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">Authenticated Matric Number (Locked to Your Profile)</label>
-              <input type="text" id="studentSelfMatric" value="ENG/123/4567" readonly class="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-400 uppercase" />
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">Authenticated Matric Number</label>
+                <input type="text" id="studentSelfMatric" value="ENG/123/4567" readonly class="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-400 uppercase" />
+              </div>
+              <div>
+                <label class="block text-xs text-amber-300 font-semibold mb-1">🔑 4-Digit Classroom PIN *</label>
+                <input type="text" id="studentClassroomPinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 4829" class="w-full bg-slate-950 border border-amber-500/50 focus:border-emerald-400 rounded-xl px-3 py-2 text-sm font-mono font-bold tracking-[0.25em] text-amber-300 text-center" />
+              </div>
+            </div>
+            <div id="studentGeofenceStatusBar" class="px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between text-[11px] font-mono">
+              <span class="text-teal-300">📍 Layer 2 GPS Geofence + Layer 1 PIN (2-Min Expiry)</span>
+              <span id="studentGpsBadge" class="text-slate-400">Verified on Sign-In</span>
             </div>
 
             <!-- Live Student Smartphone Camera Viewfinder with OPay-Style Oval Liveness Ring -->
@@ -1270,7 +1293,7 @@
           fetch(`/api/courses?department_id=${state.selectedDeptId}`),
           fetch(`/api/course-reps?department_id=${state.selectedDeptId}`),
           fetch(`/api/students?department_id=${state.selectedDeptId}&include_templates=true`),
-          fetch(`/api/sessions?department_id=${state.selectedDeptId}`)
+          fetch(`/api/sessions?department_id=${state.selectedDeptId}`, { headers: authHeaders(state.activeTab) })
         ]);
         state.courses = await coursesRes.json();
         state.allDeptCourses = await allDeptCoursesRes.json();
@@ -1326,10 +1349,30 @@
         return true;
       });
       const sessionOptions = filteredSessions.map(s =>
-        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒'} ${s.course_code} (${s.level}L • Wk ${s.week_number} • Taught by ${s.started_by}) - ${s.session_uid}</option>`
+        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒 CLOSED'} ${s.course_code} (${s.level}L • Wk ${s.week_number} • Taught by ${s.started_by}) - ${s.session_uid}</option>`
       ).join('');
       document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || `<option value="">No ${effectiveKioskLevel ? effectiveKioskLevel + 'L' : ''} sessions in this semester — start one in Lecturer tab</option>`;
-      document.getElementById('studentSelfSessionSelect').innerHTML = sessionOptions || '<option value="">No active sessions</option>';
+
+      // Student Portal Dropdown: Only show ACTIVE unlocked sessions (Layer 3: Locked sessions cannot be selected)
+      const studentSess = getActiveRoleSession('student');
+      const studentObj = studentSess ? state.allDeptStudents.find(st => st.matric_no === studentSess.matric_no) : null;
+      const effectiveStudentLevel = studentObj ? Number(studentObj.level) : state.selectedLevel;
+      const activeStudentSessions = state.sessions.filter(s => {
+        if (s.status !== 'ACTIVE') return false;
+        if (effectiveStudentLevel && s.level !== effectiveStudentLevel) return false;
+        if (state.selectedSemester && s.semester !== state.selectedSemester) return false;
+        return true;
+      });
+      const prevStudentSel = document.getElementById('studentSelfSessionSelect').value;
+      document.getElementById('studentSelfSessionSelect').innerHTML = activeStudentSessions.map(s => {
+        const remMin = Math.floor((s.total_remaining_seconds || 0) / 60);
+        const remSec = (s.total_remaining_seconds || 0) % 60;
+        const geoTag = s.has_geofence ? `📍 ≤${Math.round(s.geofence_radius_m || 150)}m GPS` : '📍 Class PIN';
+        return `<option value="${s.session_uid}">🟢 LIVE (${remMin}m ${remSec}s left • PIN #${s.pin_generation_count || 1}/5 • ${geoTag}) ${s.course_code} — Wk ${s.week_number} (${s.started_by})</option>`;
+      }).join('') || '<option value="">No active unlocked class session right now (Wait for Lecturer to launch in class)</option>';
+      if (prevStudentSel && activeStudentSessions.some(s => s.session_uid === prevStudentSel)) {
+        document.getElementById('studentSelfSessionSelect').value = prevStudentSel;
+      }
 
       const kioskStudents = effectiveKioskLevel
         ? state.allDeptStudents.filter(st => st.level === effectiveKioskLevel)
@@ -1713,25 +1756,84 @@
       showToast(`Exported ${c.course_code} attendance sheet!`);
     }
 
+    function getLiveGpsCoordinates(timeoutMs = 7000) {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          return resolve(null);
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy
+          }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 10000 }
+        );
+      });
+    }
+
+    function formatCountdownMMSS(totalSeconds) {
+      const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+      const mm = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      return `${mm}:${ss}`;
+    }
+
     async function createNewLectureSession() {
       const lectSess = getActiveRoleSession('lecturer');
       const courseId = lectSess ? lectSess.course_id : parseInt(document.getElementById('lecturerCourseSelect').value, 10);
       const week = parseInt(document.getElementById('sessionWeekInput').value, 10) || 1;
       const startedBy = document.getElementById('sessionStarterInput').value.trim() || (lectSess ? lectSess.lecturer_name : 'Course Lecturer');
       const topic = document.getElementById('sessionTopicInput').value.trim() || `Week ${week} Departmental Core Lecture`;
+      const radiusEl = document.getElementById('sessionGeofenceRadius');
+      const geofence_radius_m = radiusEl ? parseFloat(radiusEl.value) || 150.0 : 150.0;
 
       if (!courseId) return showToast('Please unlock your assigned course first', 'error');
 
-      const res = await fetch('/api/sessions', {
+      const btn = document.getElementById('launchSessionBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '📍 Capturing Classroom GPS & Generating PIN #1/5...';
+      }
+
+      try {
+        const gps = await getLiveGpsCoordinates(5500);
+        const res = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: authHeaders('lecturer'),
+          body: JSON.stringify({
+            course_id: courseId,
+            week_number: week,
+            started_by: startedBy,
+            topic,
+            latitude: gps ? gps.latitude : null,
+            longitude: gps ? gps.longitude : null,
+            geofence_radius_m
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) return showToast(data.detail || 'Error creating session', 'error');
+
+        showToast(data.message, 'success');
+        document.getElementById('sessionTopicInput').value = '';
+        await refreshAllData();
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '🚀 Launch Session &amp; Generate 4-Digit PIN (#1/5)';
+        }
+      }
+    }
+
+    async function regenerateClassroomPin(sessionUid) {
+      const res = await fetch(`/api/sessions/${sessionUid}/regenerate-pin`, {
         method: 'POST',
-        headers: authHeaders('lecturer'),
-        body: JSON.stringify({ course_id: courseId, week_number: week, started_by: startedBy, topic })
+        headers: authHeaders('lecturer')
       });
       const data = await res.json();
-      if (!res.ok) return showToast(data.detail || 'Error creating session', 'error');
-
+      if (!res.ok) return showToast(data.detail || 'Cannot generate another PIN', 'error');
       showToast(data.message, 'success');
-      document.getElementById('sessionTopicInput').value = '';
       await refreshAllData();
     }
 
@@ -1749,35 +1851,98 @@
 
       if (!courseSessions.length) {
         const cName = lectSess ? lectSess.course_code : 'this course';
-        box.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No lecture sessions recorded for <b>${cName}</b> yet. Select the Lecturer Taking Class Today on the left and click <b>"Launch Session Under My Name"</b>.</div>`;
+        box.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No lecture sessions recorded for <b>${cName}</b> yet. Select the Lecturer Taking Class Today on the left and click <b>"Launch Session &amp; Generate 4-Digit PIN (#1/5)"</b>.</div>`;
         return;
       }
-      box.innerHTML = courseSessions.map(s => `
-        <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold ${s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}">${s.status}</span>
-              <span class="font-mono text-xs font-bold text-white">${s.course_code} (${s.level}L • ${s.semester === 2 ? '2nd Sem' : '1st Sem'}) • Week ${s.week_number}</span>
-              <span class="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 text-[11px] font-mono font-semibold">
-                👨‍🏫 Taught &amp; Taken by: ${s.started_by}
-              </span>
-              <span class="font-mono text-[11px] text-slate-500">${s.session_uid}</span>
+      box.innerHTML = courseSessions.map(s => {
+        const genCount = s.pin_generation_count || 1;
+        const maxGen = s.max_pin_generations || 5;
+        const genLeft = s.generations_remaining !== undefined ? s.generations_remaining : Math.max(0, maxGen - genCount);
+        const pinSec = s.pin_remaining_seconds || 0;
+        const totalSec = s.total_remaining_seconds || 0;
+        const isPinExpired = s.status === 'ACTIVE' && (s.pin_is_expired || pinSec <= 0);
+        const geoBadge = s.has_geofence
+          ? `<span class="px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30 text-[10px] font-mono">📍 GPS Geofence ≤${Math.round(s.geofence_radius_m || 150)}m</span>`
+          : `<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">📍 PIN Mode (GPS unavailable)</span>`;
+
+        const activePinPanel = (s.status === 'ACTIVE' && s.classroom_pin) ? `
+          <div class="mt-3 p-3.5 rounded-xl ${isPinExpired ? 'bg-amber-950/35 border border-amber-500/50' : 'bg-emerald-950/30 border border-emerald-500/50'} flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-mono uppercase tracking-wider ${isPinExpired ? 'text-amber-300' : 'text-emerald-300'} font-bold">
+                  🔑 Layer 1 Classroom PIN (Generation #${genCount} of ${maxGen})
+                </span>
+                <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[11px] font-mono ${isPinExpired ? 'text-rose-400 font-bold' : 'text-amber-300'}">
+                  ${isPinExpired ? '⏰ THIS 2-MIN PIN EXPIRED' : `⏱ PIN Expires: ${formatCountdownMMSS(pinSec)}`}
+                </span>
+                <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[11px] font-mono text-teal-300">
+                  ⏳ Total 10-Min Window Left: ${formatCountdownMMSS(totalSec)}
+                </span>
+              </div>
+              <div class="flex items-center gap-3 pt-0.5">
+                <span class="font-mono text-2xl sm:text-3xl font-extrabold tracking-[0.28em] px-3.5 py-1 rounded-xl bg-slate-950 border ${isPinExpired ? 'border-rose-500/50 text-rose-400 line-through' : 'border-emerald-400 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.2)]'}">
+                  ${s.classroom_pin}
+                </span>
+                <div class="text-[11px] text-slate-300">
+                  <div>Call out this 4-digit PIN inside the lecture hall.</div>
+                  <div class="text-slate-400">Generations remaining: <b class="text-white font-mono">${genLeft} / ${maxGen}</b> (2 mins each • 10 mins total)</div>
+                </div>
+              </div>
             </div>
-            <p class="text-sm font-medium text-slate-200 mt-1">${s.topic}</p>
-            <p class="text-xs text-slate-400 mt-0.5">Verified Biometric Attendance: <b class="text-emerald-400 font-mono">${s.present_count} / ${s.total_class_size}</b> students</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button onclick="openSessionInKiosk('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
-              📱 Student Self-Sign
-            </button>
-            ${s.status === 'ACTIVE' ? `
-              <button onclick="closeLectureSession('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold transition">
-                Lock Session
+            <div class="flex flex-wrap items-center gap-2">
+              ${genCount < maxGen ? `
+                <button onclick="regenerateClassroomPin('${s.session_uid}')" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-md">
+                  🔄 Generate Next 4-Digit PIN (#${genCount + 1}/${maxGen})
+                </button>
+              ` : `
+                <span class="px-3 py-1.5 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-300 font-mono text-xs font-semibold">
+                  Max 5/5 PINs Used
+                </span>
+              `}
+              <button onclick="closeLectureSession('${s.session_uid}')" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition">
+                🔒 Permanently Lock Session
               </button>
-            ` : ''}
+            </div>
           </div>
-        </div>
-      `).join('');
+        ` : '';
+
+        return `
+          <div class="p-4 rounded-xl bg-slate-950/80 border ${s.status === 'ACTIVE' ? 'border-emerald-500/40' : 'border-slate-800'} space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold ${s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}">
+                    ${s.status === 'ACTIVE' ? '🟢 ACTIVE IN CLASS' : '🔒 PERMANENTLY LOCKED'}
+                  </span>
+                  <span class="font-mono text-xs font-bold text-white">${s.course_code} (${s.level}L • ${s.semester === 2 ? '2nd Sem' : '1st Sem'}) • Week ${s.week_number}</span>
+                  <span class="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 text-[11px] font-mono font-semibold">
+                    👨‍🏫 Taught &amp; Taken by: ${s.started_by}
+                  </span>
+                  ${geoBadge}
+                  <span class="font-mono text-[11px] text-slate-500">${s.session_uid}</span>
+                </div>
+                <p class="text-sm font-medium text-slate-200 mt-1">${s.topic}</p>
+                <p class="text-xs text-slate-400 mt-0.5">
+                  Verified In-Class Biometric Attendance: <b class="text-emerald-400 font-mono">${s.present_count} / ${s.total_class_size}</b> students
+                  • PIN Generations Used: <b class="text-white font-mono">${genCount} / ${maxGen}</b>
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                ${s.status === 'ACTIVE' ? `
+                  <button onclick="openSessionInKiosk('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+                    📱 Student Self-Sign
+                  </button>
+                ` : `
+                  <span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-500" title="Layer 3 Anti-Backdoor Guard: Locked sessions can never be reopened">
+                    🛡️ Sealed (Cannot Reopen)
+                  </span>
+                `}
+              </div>
+            </div>
+            ${activePinPanel}
+          </div>
+        `;
+      }).join('');
     }
 
     function openSessionInKiosk(sessionUid) {
@@ -1787,13 +1952,16 @@
     }
 
     async function closeLectureSession(sessionUid) {
+      if (!confirm('Layer 3 Permanent Classroom Lock:\n\nOnce you lock this session inside the classroom, it is permanently sealed and can NEVER be reopened after class.\n\nProceed to lock session now?')) {
+        return;
+      }
       const res = await fetch(`/api/sessions/${sessionUid}/close`, {
         method: 'POST',
         headers: authHeaders('lecturer')
       });
       const data = await res.json();
       if (!res.ok) return showToast(data.detail || 'Error closing session', 'error');
-      showToast(data.message || 'Session closed');
+      showToast(data.message || 'Session permanently locked');
       await refreshAllData();
     }
 
@@ -2381,13 +2549,22 @@
     async function studentPasskeyCheckIn() {
       const sessionUid = document.getElementById('studentSelfSessionSelect').value;
       const matricNo = document.getElementById('studentSelfMatric').value.trim().toUpperCase();
+      const pinEl = document.getElementById('studentClassroomPinInput');
+      const classroomPin = pinEl ? pinEl.value.trim() : '';
       if (!sessionUid || !matricNo) return showToast('Select an active class session first', 'error');
+
+      // Layer 1 Pre-Check: Require the 4-digit Classroom PIN called out by the Lecturer
+      if (!/^\d{4}$/.test(classroomPin)) {
+        if (pinEl) pinEl.focus();
+        return showToast('Layer 1 Classroom PIN Required: Enter the 4-digit PIN called out by your Course Lecturer inside the lecture hall!', 'error');
+      }
 
       const btn = document.getElementById('studentLiveScanBtn');
       const ring = document.getElementById('studentLivenessRing');
       const overlay = document.getElementById('studentLastMatchOverlay');
       const matchText = document.getElementById('studentMatchText');
       const matchPct = document.getElementById('studentMatchPct');
+      const gpsBadge = document.getElementById('studentGpsBadge');
 
       let liveCapture;
       try {
@@ -2435,6 +2612,22 @@
       }
 
       try {
+        if (btn) {
+          btn.innerHTML = '<span>📍</span> Verifying Classroom GPS Geofence &amp; PIN...';
+        }
+        if (gpsBadge) {
+          gpsBadge.textContent = 'Acquiring GPS...';
+          gpsBadge.className = 'text-amber-300';
+        }
+        const gps = await getLiveGpsCoordinates(6000);
+        if (gps && gpsBadge) {
+          gpsBadge.textContent = `GPS Locked (±${Math.round(gps.accuracy || 15)}m)`;
+          gpsBadge.className = 'text-emerald-400';
+        } else if (gpsBadge) {
+          gpsBadge.textContent = 'GPS Not Shared';
+          gpsBadge.className = 'text-rose-400';
+        }
+
         const passkeyId = `passkey-${matricNo.replace(/\//g, '-')}`;
         const res = await fetch('/api/attendance/checkin', {
           method: 'POST',
@@ -2442,6 +2635,10 @@
           body: JSON.stringify({
             session_uid: sessionUid,
             matric_no: matricNo,
+            classroom_pin: classroomPin,
+            latitude: gps ? gps.latitude : null,
+            longitude: gps ? gps.longitude : null,
+            gps_accuracy_m: gps ? gps.accuracy : null,
             verification_method: 'FACE_BIOMETRIC_KIOSK',
             face_descriptor: liveCapture.descriptor,
             face_photo_b64: liveCapture.photoB64,
@@ -2461,14 +2658,18 @@
         if (ring) {
           ring.className = 'w-36 h-44 rounded-full border-2 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.5)] transition-all duration-300';
         }
+        const distInfo = data.record.distance_from_class_m !== null && data.record.distance_from_class_m !== undefined
+          ? ` • 📍 ${data.record.distance_from_class_m}m`
+          : '';
         if (overlay) {
           overlay.classList.remove('hidden');
           overlay.className = 'absolute bottom-2.5 left-2.5 right-2.5 px-3 py-2 rounded-xl bg-emerald-950/95 border border-emerald-500/50 text-xs text-emerald-200 flex items-center justify-between';
-          matchText.textContent = `✓ ${data.record.full_name} (L2: ${data.record.euclidean_distance})`;
+          matchText.textContent = `✓ ${data.record.full_name} (L2: ${data.record.euclidean_distance}${distInfo})`;
           matchPct.textContent = `${(data.record.confidence_score * 100).toFixed(1)}% MATCH`;
         }
+        if (pinEl) pinEl.value = '';
 
-        showToast(`OPay/KYC 128D Face Verified (L2: ${data.record.euclidean_distance})! ${data.record.full_name} marked present.`, 'success');
+        showToast(`Verified in class (PIN #${data.record.pin_generation_used || 1}/5${distInfo} • L2: ${data.record.euclidean_distance})! ${data.record.full_name} marked present.`, 'success');
         await refreshAllData();
         lookupStudentDashboard();
       } finally {
@@ -2670,12 +2871,43 @@
       }
     }
 
-    // Initialize App on Load
+    // Initialize App on Load & Live 1-Second Classroom PIN / 10-Minute Attendance Window Ticker
     window.addEventListener('DOMContentLoaded', async () => {
       updateNetworkUI();
       await loadDepartments();
       renderSecurityState();
       await refreshAllData();
+
+      setInterval(() => {
+        if (!state.sessions || !state.sessions.length) return;
+        let hasActive = false;
+        let needsServerSync = false;
+        state.sessions.forEach(s => {
+          if (s.status === 'ACTIVE') {
+            hasActive = true;
+            if (s.pin_remaining_seconds > 0) {
+              s.pin_remaining_seconds -= 1;
+              if (s.pin_remaining_seconds === 0) {
+                s.pin_is_expired = true;
+                if ((s.pin_generation_count || 1) >= (s.max_pin_generations || 5)) {
+                  needsServerSync = true;
+                }
+              }
+            }
+            if (s.total_remaining_seconds > 0) {
+              s.total_remaining_seconds -= 1;
+              if (s.total_remaining_seconds === 0) {
+                needsServerSync = true;
+              }
+            }
+          }
+        });
+        if (needsServerSync) {
+          refreshAllData();
+        } else if (hasActive && state.activeTab === 'lecturer') {
+          renderSessionsList();
+        }
+      }, 1000);
     });
   </script>
 </body>
