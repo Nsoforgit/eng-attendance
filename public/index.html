@@ -2,16 +2,21 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>EngAttend | Engineering Biometric Attendance & 70% HOD Portal (300L–500L)</title>
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#090d16" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       darkMode: 'class',
+      future: {
+        hoverOnlyWhenSupported: true,
+      },
       theme: {
         extend: {
           fontFamily: {
@@ -29,8 +34,39 @@
     }
   </script>
   <style>
-    body { background-color: #090d16; color: #f3f4f6; }
-    .glass { background: rgba(17, 24, 39, 0.82); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.08); }
+    html {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
+    }
+    body {
+      background-color: #090d16;
+      color: #f3f4f6;
+      min-height: 100dvh;
+      overscroll-behavior-y: none;
+    }
+    /* Mobile Touch Psychology & Native Ergonomics (Fitts' Law >=44px hit targets + <50ms active feedback) */
+    button, [role="button"], select, label {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+    /* Prevent iOS Safari / Android mobile page auto-zoom on form input focus & enforce >=44px touch targets on phones */
+    @media (max-width: 640px) {
+      input, select, textarea {
+        font-size: 16px !important;
+        min-height: 44px;
+      }
+      button {
+        min-height: 44px;
+      }
+    }
+    .safe-bottom-nav {
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    }
+    .glass { background: rgba(17, 24, 39, 0.86); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.08); }
     .scan-line {
       position: absolute; left: 0; right: 0; height: 3px;
       background: linear-gradient(90deg, transparent, #10b981, #34d399, #10b981, transparent);
@@ -49,51 +85,60 @@
     }
   </style>
 </head>
-<body class="min-h-screen font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
+<body class="min-h-screen pb-24 sm:pb-8 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
 
   <!-- TOP HEADER & LIVE NETWORK / SEMESTER / LEVEL BAR -->
   <header class="sticky top-0 z-50 glass border-b border-slate-800/80 no-print">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 font-display font-bold text-slate-950 text-lg">
-          EA
-        </div>
-        <div>
-          <div class="flex items-center gap-2">
-            <h1 class="font-display font-bold text-lg tracking-tight text-white">EngAttend Biometrics</h1>
-            <span class="text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">300L • 400L • 500L Core</span>
+    <div class="max-w-7xl mx-auto px-3.5 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5">
+      <div class="flex items-center justify-between w-full sm:w-auto gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 font-display font-bold text-slate-950 text-base sm:text-lg shrink-0">
+            EA
           </div>
-          <p class="text-xs text-slate-400">Zero-Impersonation Faculty of Engineering Attendance & HOD 70% Exam Portal</p>
+          <div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <h1 class="font-display font-bold text-base sm:text-lg tracking-tight text-white">EngAttend Biometrics</h1>
+              <span class="text-[10px] sm:text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">300L–500L</span>
+            </div>
+            <p class="hidden sm:block text-xs text-slate-400">Zero-Impersonation Faculty of Engineering Attendance &amp; HOD 70% Exam Portal</p>
+          </div>
+        </div>
+
+        <!-- Mobile-Only Compact Auth Lock Button in Top Corner -->
+        <div class="flex sm:hidden items-center gap-1.5">
+          <button onclick="toggleSimulatedOffline()" id="networkBadgeBtnMobile" class="px-2.5 py-1.5 rounded-lg text-[11px] font-mono border bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+            Online
+          </button>
         </div>
       </div>
 
       <!-- Global Controls: Department, Semester (1st/2nd), Level (300L-500L), Network -->
-      <div class="flex items-center gap-2 flex-wrap">
+      <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto justify-between sm:justify-end">
         <!-- Department Selector -->
-        <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-lg px-2.5 py-1.5">
+        <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1 flex-1 sm:flex-initial min-w-[140px]">
           <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Dept:</span>
-          <select id="globalDeptSelect" onchange="onGlobalFilterChange()" class="bg-slate-900 text-xs font-semibold text-white focus:outline-none cursor-pointer">
+          <select id="globalDeptSelect" onchange="onGlobalFilterChange()" class="bg-slate-900 text-xs font-semibold text-white focus:outline-none cursor-pointer w-full">
             <option value="">Loading...</option>
           </select>
         </div>
 
         <!-- Semester Switcher (1st Sem / 2nd Sem / All) -->
-        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5 text-xs font-mono" title="Filter by Academic Semester">
-          <button onclick="setGlobalSemester(1)" id="semBtn-1" class="px-2.5 py-1 rounded-md transition bg-teal-500 text-slate-950 font-bold">1st Sem</button>
-          <button onclick="setGlobalSemester(2)" id="semBtn-2" class="px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white">2nd Sem</button>
-          <button onclick="setGlobalSemester(0)" id="semBtn-0" class="px-2 py-1 rounded-md transition text-slate-300 hover:text-white">Both</button>
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl p-0.5 text-xs font-mono" title="Filter by Academic Semester">
+          <button onclick="setGlobalSemester(1)" id="semBtn-1" class="px-2.5 py-1.5 rounded-lg transition bg-teal-500 text-slate-950 font-bold">1st</button>
+          <button onclick="setGlobalSemester(2)" id="semBtn-2" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white">2nd</button>
+          <button onclick="setGlobalSemester(0)" id="semBtn-0" class="px-2 py-1.5 rounded-lg transition text-slate-300 hover:text-white">All</button>
         </div>
 
         <!-- Level Filter (300L, 400L, 500L) -->
-        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5 text-xs font-mono">
-          <button onclick="setGlobalLevel(300)" id="lvlBtn-300" class="px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white">300L</button>
-          <button onclick="setGlobalLevel(400)" id="lvlBtn-400" class="px-2.5 py-1 rounded-md transition bg-emerald-500 text-slate-950 font-bold">400L</button>
-          <button onclick="setGlobalLevel(500)" id="lvlBtn-500" class="px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white">500L</button>
-          <button onclick="setGlobalLevel(0)" id="lvlBtn-0" class="px-2 py-1 rounded-md transition text-slate-300 hover:text-white">ALL</button>
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl p-0.5 text-xs font-mono">
+          <button onclick="setGlobalLevel(300)" id="lvlBtn-300" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white">300L</button>
+          <button onclick="setGlobalLevel(400)" id="lvlBtn-400" class="px-2.5 py-1.5 rounded-lg transition bg-emerald-500 text-slate-950 font-bold">400L</button>
+          <button onclick="setGlobalLevel(500)" id="lvlBtn-500" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white">500L</button>
+          <button onclick="setGlobalLevel(0)" id="lvlBtn-0" class="px-2 py-1.5 rounded-lg transition text-slate-300 hover:text-white">ALL</button>
         </div>
 
         <!-- Online/Offline Toggle & Pending Sync Queue -->
-        <button onclick="toggleSimulatedOffline()" id="networkBadgeBtn" title="Click to test Lecture Hall Offline Mode" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+        <button onclick="toggleSimulatedOffline()" id="networkBadgeBtn" title="Click to test Lecture Hall Offline Mode" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
           <span id="networkDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
           <span id="networkStatusText">Online</span>
         </button>
@@ -104,9 +149,10 @@
       </div>
     </div>
 
-    <!-- ROLE NAVIGATION TABS WITH SECURITY LOCK INDICATORS -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 border-t border-slate-800/60 bg-slate-950/60 flex items-center justify-between gap-2 flex-wrap">
-      <nav class="flex items-center gap-1 overflow-x-auto py-1.5 text-xs sm:text-sm font-medium">
+    <!-- DESKTOP ROLE NAVIGATION TABS + ACTIVE SECURITY SESSION STATUS BAR -->
+    <div class="max-w-7xl mx-auto px-3.5 sm:px-6 border-t border-slate-800/60 bg-slate-950/60 flex items-center justify-between gap-2 flex-wrap">
+      <!-- Desktop / Tablet Role Tabs (Hidden on phones because phones use the Fixed Bottom Thumb-Zone Bar) -->
+      <nav class="hidden sm:flex items-center gap-1 overflow-x-auto py-1.5 text-xs sm:text-sm font-medium">
         <button onclick="switchRoleTab('hod')" id="tab-hod" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
           <span id="lockIcon-hod">🔒</span> 1. Department HOD
         </button>
@@ -122,17 +168,39 @@
       </nav>
 
       <!-- Active Security Session Status Pill -->
-      <div id="activeAuthBar" class="flex items-center gap-2 py-1 text-xs font-mono">
-        <span id="activeAuthLabel" class="text-amber-400">🔒 Portal Locked</span>
-        <button onclick="lockCurrentPortal()" id="logoutRoleBtn" class="hidden px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] transition">
+      <div id="activeAuthBar" class="flex items-center justify-between w-full sm:w-auto gap-2 py-1.5 text-xs font-mono">
+        <span id="activeAuthLabel" class="text-amber-400 truncate">🔒 Portal Locked</span>
+        <button onclick="lockCurrentPortal()" id="logoutRoleBtn" class="hidden px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition">
           Lock Portal
         </button>
       </div>
     </div>
   </header>
 
-  <!-- TOAST NOTIFICATION -->
-  <div id="toastBox" class="fixed bottom-5 right-5 z-50 hidden max-w-md px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all duration-300"></div>
+  <!-- MOBILE THUMB-ZONE BOTTOM NAVIGATION BAR (49pt+ Ergonomic Reach on Smartphones) -->
+  <nav aria-label="Mobile Role Navigation" class="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 safe-bottom-nav no-print">
+    <div class="grid grid-cols-4 gap-1 px-2 pt-1.5">
+      <button type="button" onclick="switchRoleTab('hod')" id="mob-tab-hod" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+        <span class="text-sm leading-none"><span id="mobLockIcon-hod">🔒</span> 🏛️</span>
+        <span class="text-[11px] mt-1 leading-tight">1. HOD</span>
+      </button>
+      <button type="button" onclick="switchRoleTab('lecturer')" id="mob-tab-lecturer" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400">
+        <span class="text-sm leading-none"><span id="mobLockIcon-lecturer">🔒</span> 👨‍🏫</span>
+        <span class="text-[11px] mt-1 leading-tight">2. Lecturer</span>
+      </button>
+      <button type="button" onclick="switchRoleTab('courserep')" id="mob-tab-courserep" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400">
+        <span class="text-sm leading-none"><span id="mobLockIcon-courserep">🔒</span> 🎓</span>
+        <span class="text-[11px] mt-1 leading-tight">3. Rep KYC</span>
+      </button>
+      <button type="button" onclick="switchRoleTab('student')" id="mob-tab-student" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400">
+        <span class="text-sm leading-none"><span id="mobLockIcon-student">🔒</span> 🤳</span>
+        <span class="text-[11px] mt-1 leading-tight">4. Student</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- TOAST NOTIFICATION (Positioned above thumb-zone bar on mobile) -->
+  <div id="toastBox" class="fixed bottom-20 sm:bottom-5 right-3 left-3 sm:left-auto sm:right-5 z-50 hidden max-w-md px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all duration-300"></div>
 
   <!-- MAIN WORKSPACE -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -439,7 +507,7 @@
 
           <!-- Live Enrollment Camera + Oval KYC Frame + Captured Face Reference Preview -->
           <div class="space-y-2">
-            <div class="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 aspect-video flex items-center justify-center">
+            <div class="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 aspect-[4/5] sm:aspect-video flex items-center justify-center">
               <video id="enrollVideo" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
               <canvas id="enrollCanvas" width="320" height="240" class="hidden"></canvas>
 
@@ -597,7 +665,7 @@
             </div>
 
             <!-- Live Student Smartphone Camera Viewfinder with OPay-Style Oval Liveness Ring -->
-            <div class="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-emerald-500/40 aspect-video flex items-center justify-center">
+            <div class="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-emerald-500/40 aspect-[4/5] sm:aspect-video flex items-center justify-center">
               <video id="studentVideo" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
               <canvas id="studentCanvas" width="320" height="240" class="hidden"></canvas>
               <img id="studentFallbackImg" class="hidden w-full h-full object-cover" alt="" />
@@ -654,7 +722,7 @@
           <span class="text-[11px] font-mono uppercase text-emerald-400">Department HOD Security</span>
           <h3 class="font-display text-lg font-bold text-white">Customize HOD Name & Security PIN</h3>
         </div>
-        <button onclick="closeModal('editHodModal')" class="text-slate-400 hover:text-white">✕</button>
+        <button onclick="closeModal('editHodModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
       </div>
       <p class="text-xs text-slate-400">Replace the default/demo HOD name for this department and optionally set a new HOD Security PIN.</p>
       <div class="space-y-3">
@@ -682,7 +750,7 @@
     <div class="glass rounded-2xl max-w-md w-full p-6 border border-slate-700 space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="font-display text-lg font-bold text-white">Register Engineering Department</h3>
-        <button onclick="closeModal('deptModal')" class="text-slate-400 hover:text-white">✕</button>
+        <button onclick="closeModal('deptModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
       </div>
       <div class="space-y-3">
         <div>
@@ -713,7 +781,7 @@
     <div class="glass rounded-2xl max-w-md w-full p-6 border border-slate-700 space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="font-display text-lg font-bold text-white">Add 300L / 400L / 500L Core Course</h3>
-        <button onclick="closeModal('courseModal')" class="text-slate-400 hover:text-white">✕</button>
+        <button onclick="closeModal('courseModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
       </div>
       <div class="space-y-3">
         <div class="grid grid-cols-3 gap-2">
@@ -764,7 +832,7 @@
           <span class="text-[11px] font-mono uppercase text-emerald-400">HOD Course Management</span>
           <h3 class="font-display text-lg font-bold text-white">Edit or Remove Course</h3>
         </div>
-        <button onclick="closeModal('editCourseModal')" class="text-slate-400 hover:text-white">✕</button>
+        <button onclick="closeModal('editCourseModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
       </div>
       <p class="text-xs text-slate-400">Edit the course details or co-lecturers assigned to this course:</p>
       <input type="hidden" id="editCourseId" />
@@ -822,7 +890,7 @@
           <span class="text-[11px] font-mono uppercase text-emerald-400">Course Data Isolation &amp; Privacy</span>
           <h3 id="editLecturerPinModalTitle" class="font-display text-lg font-bold text-white">Customize Private Course PIN</h3>
         </div>
-        <button onclick="closeModal('editLecturerPinModal')" class="text-slate-400 hover:text-white">✕</button>
+        <button onclick="closeModal('editLecturerPinModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
       </div>
       <p class="text-xs text-slate-400">
         Set a private Access PIN for this course so only the assigned lecturer(s) for this course can unlock its workspace and attendance data.
@@ -851,7 +919,7 @@
           <span class="text-[11px] font-mono uppercase text-emerald-400">Level Course Rep Security</span>
           <h3 id="editCourseRepModalTitle" class="font-display text-lg font-bold text-white">Customize Level Course Rep Profile &amp; PIN</h3>
         </div>
-        <button onclick="closeModal('editCourseRepModal')" class="text-slate-400 hover:text-white">✕</button>
+        <button onclick="closeModal('editCourseRepModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
       </div>
       <p class="text-xs text-slate-400">
         Customize the official Course Rep Name, Matric Number, and private Security PIN for this specific level so other levels cannot access your level's dashboard.
@@ -936,15 +1004,26 @@
       return headers;
     }
 
+    function triggerHapticFeedback(pattern = 15) {
+      try {
+        if (navigator && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(pattern);
+        }
+      } catch (_) {}
+    }
+
     function showToast(msg, type = 'success') {
       const box = document.getElementById('toastBox');
-      box.className = 'fixed bottom-5 right-5 z-50 max-w-md px-4 py-3 rounded-xl shadow-2xl border text-xs sm:text-sm font-medium transition-all duration-300 ';
+      box.className = 'fixed bottom-20 sm:bottom-5 right-3 left-3 sm:left-auto sm:right-5 z-50 max-w-md px-4 py-3 rounded-xl shadow-2xl border text-xs sm:text-sm font-medium transition-all duration-300 ';
       if (type === 'error') {
         box.className += 'bg-rose-950/95 border-rose-500 text-rose-200';
+        triggerHapticFeedback([35, 50, 35]);
       } else if (type === 'warn') {
         box.className += 'bg-amber-950/95 border-amber-500 text-amber-200';
+        triggerHapticFeedback(20);
       } else {
         box.className += 'bg-emerald-950/95 border-emerald-500 text-emerald-200';
+        triggerHapticFeedback(15);
       }
       box.textContent = msg;
       box.classList.remove('hidden');
@@ -969,6 +1048,7 @@
 
     function updateNetworkUI() {
       const btn = document.getElementById('networkBadgeBtn');
+      const mobBtn = document.getElementById('networkBadgeBtnMobile');
       const dot = document.getElementById('networkDot');
       const txt = document.getElementById('networkStatusText');
       const syncBtn = document.getElementById('syncQueueBtn');
@@ -996,13 +1076,21 @@
       }
 
       if (isOfflineMode()) {
-        btn.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-amber-500/15 border-amber-500/40 text-amber-300';
+        btn.className = 'hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-amber-500/15 border-amber-500/40 text-amber-300';
         dot.className = 'w-2 h-2 rounded-full bg-amber-400';
         txt.textContent = 'Offline Mode';
+        if (mobBtn) {
+          mobBtn.className = 'px-2.5 py-1.5 rounded-lg text-[11px] font-mono border bg-amber-500/15 border-amber-500/40 text-amber-300';
+          mobBtn.textContent = 'Offline';
+        }
       } else {
-        btn.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+        btn.className = 'hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
         dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
         txt.textContent = 'Online';
+        if (mobBtn) {
+          mobBtn.className = 'px-2.5 py-1.5 rounded-lg text-[11px] font-mono border bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+          mobBtn.textContent = 'Online';
+        }
       }
     }
 
@@ -1063,10 +1151,13 @@
       const currDept = state.departments.find(d => d.id === state.selectedDeptId);
       const deptLabel = currDept ? `${currDept.name} (${currDept.code})` : 'Engineering';
 
-      // Update lock icons on all 4 tabs
+      // Update lock icons on all 4 tabs (both desktop header tabs and mobile bottom thumb-zone bar)
       ['hod', 'lecturer', 'courserep', 'student'].forEach(r => {
+        const isUnlocked = Boolean(getActiveRoleSession(r));
         const iconEl = document.getElementById(`lockIcon-${r}`);
-        if (iconEl) iconEl.textContent = getActiveRoleSession(r) ? '🔓' : '🔒';
+        if (iconEl) iconEl.textContent = isUnlocked ? '🔓' : '🔒';
+        const mobIconEl = document.getElementById(`mobLockIcon-${r}`);
+        if (mobIconEl) mobIconEl.textContent = isUnlocked ? '🔓' : '🔒';
       });
 
       const gateCard = document.getElementById('securityGateCard');
@@ -1215,12 +1306,23 @@
     // =========================================================================
     function switchRoleTab(tab) {
       state.activeTab = tab;
+      triggerHapticFeedback(10);
       ['hod', 'lecturer', 'courserep', 'student'].forEach(t => {
         const btn = document.getElementById(`tab-${t}`);
-        if (t === tab) {
-          btn.className = 'role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
-        } else {
-          btn.className = 'role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white';
+        if (btn) {
+          if (t === tab) {
+            btn.className = 'role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
+          } else {
+            btn.className = 'role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white';
+          }
+        }
+        const mobBtn = document.getElementById(`mob-tab-${t}`);
+        if (mobBtn) {
+          if (t === tab) {
+            mobBtn.className = 'flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
+          } else {
+            mobBtn.className = 'flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400';
+          }
         }
       });
       renderSecurityState();
@@ -1228,12 +1330,13 @@
 
     function setGlobalSemester(sem) {
       state.selectedSemester = sem;
+      triggerHapticFeedback(10);
       [1, 2, 0].forEach(s => {
         const b = document.getElementById(`semBtn-${s}`);
         if (s === sem) {
-          b.className = 'px-2.5 py-1 rounded-md transition bg-teal-500 text-slate-950 font-bold';
+          b.className = 'px-2.5 py-1.5 rounded-lg transition bg-teal-500 text-slate-950 font-bold';
         } else {
-          b.className = 'px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white';
+          b.className = 'px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white';
         }
       });
       const semText = sem === 1 ? 'First Semester' : (sem === 2 ? 'Second Semester' : '1st & 2nd Semesters');
@@ -1245,12 +1348,13 @@
 
     function setGlobalLevel(lvl) {
       state.selectedLevel = lvl;
+      triggerHapticFeedback(10);
       [300, 400, 500, 0].forEach(l => {
         const b = document.getElementById(`lvlBtn-${l}`);
         if (l === lvl) {
-          b.className = 'px-2.5 py-1 rounded-md transition bg-emerald-500 text-slate-950 font-bold';
+          b.className = 'px-2.5 py-1.5 rounded-lg transition bg-emerald-500 text-slate-950 font-bold';
         } else {
-          b.className = 'px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white';
+          b.className = 'px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white';
         }
       });
       refreshAllData();
