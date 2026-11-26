@@ -78,6 +78,130 @@ class MobileAuditor:
         self.passed_count = 0
         self.files_checked = 0
 
+    def audit_html_template(self, filepath: str, content: str) -> None:
+        """
+        Audits HTML and Jinja2 (.html, .jinja2) templates for Mobile Web / Tailwind PWA compliance:
+        1. Missing or misconfigured <meta name="viewport"> tags (e.g., user-scalable=no, maximum-scale=1).
+        2. Interactive elements (<button>, <a>, <input>) lacking mobile-friendly touch target sizing (>=44px height, e.g., min-h-[44px], h-11, h-12, py-2.5, py-3, py-4).
+        3. Horizontal overflow risks:
+           - Fixed desktop pixel widths (e.g., w-[500px]) without responsive prefix.
+           - <table> elements not wrapped in overflow-x-auto.
+           - Multi-column grids (grid-cols-2/3/4/5/6/12) missing a mobile-first grid-cols-1 (or responsive sm:/md:/lg:) prefix.
+        4. Form inputs (<input>, <select>, <textarea>) with font sizes smaller than 16px (text-xs, text-sm, text-[10px..15px]) on mobile, which trigger unwanted auto-zoom on iOS Safari.
+        """
+        filename = os.path.basename(filepath)
+        lines = content.splitlines()
+
+        # 1. Viewport Meta Tag Check
+        is_full_html_doc = bool(re.search(r'<!DOCTYPE\s+html|<html\b|<head\b', content, re.IGNORECASE))
+        viewport_matches = list(re.finditer(r'<meta\b[^>]*name=["\']viewport["\'][^>]*>', content, re.IGNORECASE))
+        if is_full_html_doc and not viewport_matches:
+            self.issues.append(f"[Viewport] {filename}:1: Missing <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"> tag.")
+        elif viewport_matches:
+            for vm in viewport_matches:
+                tag_str = vm.group(0)
+                line_no = content[:vm.start()].count('\n') + 1
+                if not re.search(r'width\s*=\s*device-width', tag_str, re.IGNORECASE):
+                    self.issues.append(f"[Viewport] {filename}:{line_no}: <meta name=\"viewport\"> is missing 'width=device-width'.")
+                if re.search(r'user-scalable\s*=\s*(no|0)\b|maximum-scale\s*=\s*1(\.0)?\b', tag_str, re.IGNORECASE):
+                    self.issues.append(f"[Viewport] {filename}:{line_no}: <meta name=\"viewport\"> disables user zoom ('user-scalable=no' or 'maximum-scale=1.0').")
+                else:
+                    self.passed_count += 1
+
+        # Helper regexes for Tailwind classes
+        touch_height_ok_re = re.compile(
+            r'(?:^|\s|:)(?:min-h-\[(?:4[4-9]|[5-9]\d|\d{3,})px\]|min-h-(?:11|12|14|16)|h-(?:11|12|14|16)|h-\[(?:4[4-9]|[5-9]\d|\d{3,})px\]|py-(?:2\.5|3|3\.5|4|5|6)|p-(?:3|3\.5|4|5|6))(?=\s|$)'
+        )
+        small_touch_class_re = re.compile(
+            r'\b(?:py-(?:0|0\.5|1|1\.5|2)|p-(?:0|0\.5|1|1\.5|2)|h-(?:[1-9]|10)|text-\[(?:9|10|11)px\])\b'
+        )
+        small_input_font_re = re.compile(
+            r'\b(text-xs|text-sm|text-\[(?:1[0-5]|[1-9])px\])\b'
+        )
+        mobile_16px_override_re = re.compile(
+            r'\b(text-base|text-lg|text-xl|text-2xl|text-\[1[6-9]px\])\b'
+        )
+        fixed_width_re = re.compile(
+            r'(?<![:\w-])(w-\[(\d+)px\]|min-w-\[(\d+)px\])'
+        )
+        bare_multicol_grid_re = re.compile(
+            r'(?<![:\w-])(grid-cols-(?:[2-9]|1[0-2]))\b'
+        )
+
+        for idx, line in enumerate(lines, start=1):
+            # 2. Interactive Elements (<button>, <a>, <input>) Touch Target Sizing (>=44px height)
+            for m in re.finditer(r'<(button|a|input)\b([^>]*)>', line, re.IGNORECASE):
+                tag_name = m.group(1).lower()
+                attrs = m.group(2)
+                if tag_name == 'input' and re.search(r'type=["\'](?:hidden|checkbox|radio)["\']', attrs, re.IGNORECASE):
+                    continue
+                if re.search(r'\bhidden\b', attrs) and not re.search(r'\b(?:sm|md|lg):(?:flex|block|inline|grid)\b', attrs):
+                    continue
+                cls_match = re.search(r'class=["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+                classes = cls_match.group(1) if cls_match else ""
+                if not classes:
+                    continue
+                if touch_height_ok_re.search(classes):
+                    self.passed_count += 1
+                else:
+                    bad_cls = small_touch_class_re.search(classes)
+                    flagged_token = bad_cls.group(0) if bad_cls else "missing min-h-[44px] / py-3"
+                    self.warnings.append(
+                        f"[Touch Target <44px] {filename}:{idx}: <{tag_name}> has '{flagged_token}' without mobile-friendly >=44px touch height (add min-h-[44px] or py-3)."
+                    )
+
+            # 3a. Horizontal Overflow Risk: Fixed desktop widths (e.g. w-[500px] >= 360px)
+            for wm in fixed_width_re.finditer(line):
+                full_cls = wm.group(1)
+                px_val = int(wm.group(2) or wm.group(3) or 0)
+                if px_val >= 360:
+                    self.issues.append(
+                        f"[Horizontal Overflow] {filename}:{idx}: Fixed desktop width '{full_cls}' ({px_val}px) risks horizontal scroll on 375px mobile screens."
+                    )
+
+            # 3b. Horizontal Overflow Risk: Multi-column grids missing mobile-first grid-cols-1
+            if 'grid' in line:
+                for gm in bare_multicol_grid_re.finditer(line):
+                    grid_cls = gm.group(1)
+                    # Skip if inside fixed bottom mobile navigation bar
+                    if 'Mobile Role Navigation' in content[max(0, content.find(line) - 250):content.find(line) + len(line)]:
+                        continue
+                    if 'grid-cols-1' not in line:
+                        self.warnings.append(
+                            f"[Responsive Grid] {filename}:{idx}: Multi-column grid '{grid_cls}' is missing mobile-first 'grid-cols-1' (e.g., use 'grid-cols-1 sm:{grid_cls}')."
+                        )
+                    else:
+                        self.passed_count += 1
+
+            # 3c. Horizontal Overflow Risk: <table> not wrapped in overflow-x-auto
+            for tm in re.finditer(r'<table\b[^>]*>', line, re.IGNORECASE):
+                context_start = max(0, idx - 6)
+                preceding_block = "\n".join(lines[context_start:idx])
+                if 'overflow-x-auto' not in preceding_block:
+                    self.issues.append(
+                        f"[Table Overflow] {filename}:{idx}: <table> is not wrapped in an 'overflow-x-auto' container."
+                    )
+                else:
+                    self.passed_count += 1
+
+            # 4. Form Inputs (<input>, <select>, <textarea>) with font-size < 16px (iOS Safari auto-zoom)
+            for im in re.finditer(r'<(input|select|textarea)\b([^>]*)>', line, re.IGNORECASE):
+                tag_name = im.group(1).lower()
+                attrs = im.group(2)
+                if tag_name == 'input' and re.search(r'type=["\']hidden["\']', attrs, re.IGNORECASE):
+                    continue
+                cls_match = re.search(r'class=["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+                classes = cls_match.group(1) if cls_match else ""
+                if not classes:
+                    continue
+                small_font = small_input_font_re.search(classes)
+                if small_font and not mobile_16px_override_re.search(classes):
+                    self.warnings.append(
+                        f"[iOS Input Auto-Zoom] {filename}:{idx}: <{tag_name}> uses '{small_font.group(1)}' (<16px) without mobile 'text-base' (use 'text-base sm:{small_font.group(1)}' to prevent iOS Safari auto-zoom)."
+                    )
+                elif mobile_16px_override_re.search(classes):
+                    self.passed_count += 1
+
     def audit_file(self, filepath: str) -> None:
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
@@ -87,6 +211,11 @@ class MobileAuditor:
 
         self.files_checked += 1
         filename = os.path.basename(filepath)
+        ext = Path(filepath).suffix.lower()
+
+        if ext in {'.html', '.htm', '.jinja', '.jinja2', '.j2'}:
+            self.audit_html_template(filepath, content)
+            return
 
         # Detect framework
         is_react_native = bool(re.search(r'react-native|@react-navigation|React\.Native', content))
@@ -611,11 +740,11 @@ class MobileAuditor:
             self.passed_count += 1  # Hermes is default in RN 0.70+
 
     def audit_directory(self, directory: str) -> None:
-        extensions = {'.tsx', '.ts', '.jsx', '.js', '.dart'}
+        extensions = {'.tsx', '.ts', '.jsx', '.js', '.dart', '.html', '.htm', '.jinja', '.jinja2', '.j2'}
         for root, dirs, files in os.walk(directory):
-            dirs[:] = [d for d in dirs if d not in {'node_modules', '.git', 'dist', 'build', '.next', 'ios', 'android', 'build', '.idea'}]
+            dirs[:] = [d for d in dirs if d not in {'node_modules', '.git', 'dist', 'build', '.next', 'ios', 'android', 'build', '.idea', '.agents', '__pycache__'}]
             for file in files:
-                if Path(file).suffix in extensions:
+                if Path(file).suffix.lower() in extensions:
                     self.audit_file(os.path.join(root, file))
 
     def get_report(self):
@@ -651,11 +780,11 @@ def main():
         print("-" * 50)
         if report['issues']:
             print(f"[!] ISSUES ({len(report['issues'])}):")
-            for i in report['issues'][:10]:
+            for i in report['issues'][:50]:
                 print(f"  - {i}")
         if report['warnings']:
             print(f"[*] WARNINGS ({len(report['warnings'])}):")
-            for w in report['warnings'][:15]:
+            for w in report['warnings'][:100]:
                 print(f"  - {w}")
         print(f"[+] PASSED CHECKS: {report['passed_checks']}")
         status = "PASS" if report['compliant'] else "FAIL"

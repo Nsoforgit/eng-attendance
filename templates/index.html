@@ -1,0 +1,3018 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>EngAttend | Engineering Biometric Attendance & 70% HOD Portal (300L–500L)</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#090d16" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      future: {
+        hoverOnlyWhenSupported: true,
+      },
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            slate950: '#090d16',
+            slate900: '#111827',
+            emerald500: '#10b981',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html {
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
+    }
+    body {
+      background-color: #090d16;
+      color: #f3f4f6;
+      min-height: 100dvh;
+      overscroll-behavior-y: none;
+    }
+    /* Mobile Touch Psychology & Native Ergonomics (Fitts' Law >=44px hit targets + <50ms active feedback) */
+    button, [role="button"], select, label {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+    /* Prevent iOS Safari / Android mobile page auto-zoom on form input focus & enforce >=44px touch targets on phones */
+    @media (max-width: 640px) {
+      input, select, textarea {
+        font-size: 16px !important;
+        min-height: 44px;
+      }
+      button {
+        min-height: 44px;
+      }
+    }
+    .safe-bottom-nav {
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    }
+    .glass { background: rgba(17, 24, 39, 0.86); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.08); }
+    .scan-line {
+      position: absolute; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, transparent, #10b981, #34d399, #10b981, transparent);
+      box-shadow: 0 0 14px #10b981;
+      animation: scanMove 2.2s infinite ease-in-out;
+    }
+    @keyframes scanMove {
+      0% { top: 8%; opacity: 0.6; }
+      50% { top: 88%; opacity: 1; }
+      100% { top: 8%; opacity: 0.6; }
+    }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff !important; color: #000 !important; }
+      .glass { background: #fff !important; border: 1px solid #ccc !important; color: #000 !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-24 sm:pb-8 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
+
+  <!-- TOP HEADER & LIVE NETWORK / SEMESTER / LEVEL BAR -->
+  <header class="sticky top-0 z-50 glass border-b border-slate-800/80 no-print">
+    <div class="max-w-7xl mx-auto px-3.5 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2.5">
+      <div class="flex items-center justify-between w-full sm:w-auto gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 font-display font-bold text-slate-950 text-base sm:text-lg shrink-0">
+            EA
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <h1 class="font-display font-bold text-base sm:text-lg tracking-tight text-white">EngAttend Biometrics</h1>
+              <span class="text-[10px] sm:text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">300L–500L</span>
+            </div>
+            <p class="hidden sm:block text-xs text-slate-400">Zero-Impersonation Faculty of Engineering Attendance &amp; HOD 70% Exam Portal</p>
+          </div>
+        </div>
+
+        <!-- Mobile-Only Compact Auth Lock Button in Top Corner -->
+        <div class="flex sm:hidden items-center gap-1.5">
+          <button onclick="toggleSimulatedOffline()" id="networkBadgeBtnMobile" class="px-2.5 py-1.5 rounded-lg text-[11px] font-mono border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 min-h-[44px]">
+            Online
+          </button>
+        </div>
+      </div>
+
+      <!-- Global Controls: Department, Semester (1st/2nd), Level (300L-500L), Network -->
+      <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto justify-between sm:justify-end">
+        <!-- Department Selector -->
+        <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1 flex-1 sm:flex-initial min-w-[140px]">
+          <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Dept:</span>
+          <select id="globalDeptSelect" onchange="onGlobalFilterChange()" class="bg-slate-900 text-base sm:text-xs font-semibold text-white focus:outline-none cursor-pointer w-full min-h-[44px]">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+
+        <!-- Semester Switcher (1st Sem / 2nd Sem / All) -->
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl p-0.5 text-xs font-mono" title="Filter by Academic Semester">
+          <button onclick="setGlobalSemester(1)" id="semBtn-1" class="px-2.5 py-1.5 rounded-lg transition bg-teal-500 text-slate-950 font-bold min-h-[44px]">1st</button>
+          <button onclick="setGlobalSemester(2)" id="semBtn-2" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">2nd</button>
+          <button onclick="setGlobalSemester(0)" id="semBtn-0" class="px-2 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">All</button>
+        </div>
+
+        <!-- Level Filter (300L, 400L, 500L) -->
+        <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl p-0.5 text-xs font-mono">
+          <button onclick="setGlobalLevel(300)" id="lvlBtn-300" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">300L</button>
+          <button onclick="setGlobalLevel(400)" id="lvlBtn-400" class="px-2.5 py-1.5 rounded-lg transition bg-emerald-500 text-slate-950 font-bold min-h-[44px]">400L</button>
+          <button onclick="setGlobalLevel(500)" id="lvlBtn-500" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">500L</button>
+          <button onclick="setGlobalLevel(0)" id="lvlBtn-0" class="px-2 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">ALL</button>
+        </div>
+
+        <!-- Online/Offline Toggle & Pending Sync Queue -->
+        <button onclick="toggleSimulatedOffline()" id="networkBadgeBtn" title="Click to test Lecture Hall Offline Mode" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300 min-h-[44px]">
+          <span id="networkDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span id="networkStatusText">Online</span>
+        </button>
+
+        <button onclick="syncOfflineQueueNow()" id="syncQueueBtn" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 transition shadow-lg shadow-amber-500/20 min-h-[44px]">
+          <span>Sync <span id="offlineCountBadge">0</span> Queued</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- DESKTOP ROLE NAVIGATION TABS + ACTIVE SECURITY SESSION STATUS BAR -->
+    <div class="max-w-7xl mx-auto px-3.5 sm:px-6 border-t border-slate-800/60 bg-slate-950/60 flex items-center justify-between gap-2 flex-wrap">
+      <!-- Desktop / Tablet Role Tabs (Hidden on phones because phones use the Fixed Bottom Thumb-Zone Bar) -->
+      <nav class="hidden sm:flex items-center gap-1 overflow-x-auto py-1.5 text-xs sm:text-sm font-medium">
+        <button onclick="switchRoleTab('hod')" id="tab-hod" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold min-h-[44px]">
+          <span id="lockIcon-hod">🔒</span> 1. Department HOD
+        </button>
+        <button onclick="switchRoleTab('lecturer')" id="tab-lecturer" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white min-h-[44px]">
+          <span id="lockIcon-lecturer">🔒</span> 2. Course Lecturer
+        </button>
+        <button onclick="switchRoleTab('courserep')" id="tab-courserep" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white min-h-[44px]">
+          <span id="lockIcon-courserep">🔒</span> 3. Level Course Rep
+        </button>
+        <button onclick="switchRoleTab('student')" id="tab-student" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white min-h-[44px]">
+          <span id="lockIcon-student">🔒</span> 4. Student Profile Portal
+        </button>
+      </nav>
+
+      <!-- Active Security Session Status Pill -->
+      <div id="activeAuthBar" class="flex items-center justify-between w-full sm:w-auto gap-2 py-1.5 text-xs font-mono">
+        <span id="activeAuthLabel" class="text-amber-400 truncate">🔒 Portal Locked</span>
+        <button onclick="lockCurrentPortal()" id="logoutRoleBtn" class="hidden px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition min-h-[44px]">
+          Lock Portal
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MOBILE THUMB-ZONE BOTTOM NAVIGATION BAR (49pt+ Ergonomic Reach on Smartphones) -->
+  <nav aria-label="Mobile Role Navigation" class="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 safe-bottom-nav no-print">
+    <div class="grid grid-cols-4 gap-1 px-2 pt-1.5">
+      <button type="button" onclick="switchRoleTab('hod')" id="mob-tab-hod" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold min-h-[44px]">
+        <span class="text-sm leading-none"><span id="mobLockIcon-hod">🔒</span> 🏛️</span>
+        <span class="text-[11px] mt-1 leading-tight">1. HOD</span>
+      </button>
+      <button type="button" onclick="switchRoleTab('lecturer')" id="mob-tab-lecturer" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400 min-h-[44px]">
+        <span class="text-sm leading-none"><span id="mobLockIcon-lecturer">🔒</span> 👨‍🏫</span>
+        <span class="text-[11px] mt-1 leading-tight">2. Lecturer</span>
+      </button>
+      <button type="button" onclick="switchRoleTab('courserep')" id="mob-tab-courserep" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400 min-h-[44px]">
+        <span class="text-sm leading-none"><span id="mobLockIcon-courserep">🔒</span> 🎓</span>
+        <span class="text-[11px] mt-1 leading-tight">3. Rep KYC</span>
+      </button>
+      <button type="button" onclick="switchRoleTab('student')" id="mob-tab-student" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400 min-h-[44px]">
+        <span class="text-sm leading-none"><span id="mobLockIcon-student">🔒</span> 🤳</span>
+        <span class="text-[11px] mt-1 leading-tight">4. Student</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- TOAST NOTIFICATION (Positioned above thumb-zone bar on mobile) -->
+  <div id="toastBox" class="fixed bottom-20 sm:bottom-5 right-3 left-3 sm:left-auto sm:right-5 z-50 hidden max-w-md px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all duration-300"></div>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- ======================================================================= -->
+    <!-- ROLE SECURITY GATE (SHOWN WHEN ACTIVE PORTAL TAB IS NOT UNLOCKED)       -->
+    <!-- ======================================================================= -->
+    <section id="securityGateCard" class="glass rounded-2xl p-6 sm:p-8 border border-emerald-500/30 max-w-lg mx-auto my-6 space-y-5 shadow-2xl">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-2xl">
+          🔐
+        </div>
+        <div>
+          <span id="gateRoleBadge" class="text-[11px] font-mono uppercase text-emerald-400">Protected Role Session</span>
+          <h2 id="gateTitle" class="font-display text-xl font-bold text-white">Unlock Department HOD Portal</h2>
+          <p id="gateSubtitle" class="text-xs text-slate-400">Prevent unauthorized changes: verify your credentials to access this portal.</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <!-- Course Lecturer Per-Course & Co-Lecturer Selection (Shown ONLY when unlocking Tab 2: Course Lecturer) -->
+        <div id="gateLecturerGroup" class="hidden space-y-3 p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30">
+          <div>
+            <label class="block text-xs text-emerald-300 font-semibold mb-1">1. Select Your Assigned Course (Synced from HOD Registry)</label>
+            <select id="gateLecturerCourseSelect" onchange="onGateLecturerCourseChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-base sm:text-xs sm:text-sm font-mono text-white"></select>
+            <p class="text-[11px] text-slate-400 mt-1">Strict Data Isolation: Unlocking a course grants access <b>only</b> to that course's database and attendance records.</p>
+          </div>
+          <div>
+            <label class="block text-xs text-teal-300 font-semibold mb-1">2. Select Lecturer Taking Class / Signing In Today</label>
+            <select id="gateLecturerNameSelect" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-3 py-2 text-base sm:text-xs sm:text-sm text-white font-medium min-h-[44px]"></select>
+            <p class="text-[11px] text-slate-400 mt-1">For co-taught courses (e.g. Prof. Oyeneyin & Engr. Omoregbe), every session & synced record logs which lecturer taught that day.</p>
+          </div>
+        </div>
+
+        <!-- Level Course Rep Mandatory Level Selection (Shown ONLY when unlocking Tab 3: Level Course Rep) -->
+        <div id="gateCourseRepGroup" class="hidden space-y-3 p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30">
+          <div>
+            <label class="block text-xs text-emerald-300 font-semibold mb-1">1. Select Your Assigned Level (Before Entering PIN) *</label>
+            <select id="gateCourseRepLevelSelect" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-base sm:text-xs sm:text-sm font-mono text-white">
+              <option value="300">300 Level Course Rep Dashboard</option>
+              <option value="400" selected>400 Level Course Rep Dashboard</option>
+              <option value="500">500 Level Course Rep Dashboard</option>
+            </select>
+            <p class="text-[11px] text-slate-400 mt-1">Strict Level Isolation: Selecting your level directs you straight to that exact level's biometric kiosk &amp; classmate registry.</p>
+          </div>
+        </div>
+
+        <div id="gatePinGroup">
+          <label id="gatePinLabel" class="block text-xs text-slate-300 font-medium mb-1">Security Access PIN</label>
+          <input type="password" id="gatePinInput" placeholder="Enter 4-digit PIN (Default Demo PIN: 1234)" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-base sm:text-sm font-mono text-white" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
+          <p id="gatePinHint" class="text-[11px] text-slate-400 mt-1">Default PIN for testing is <code class="text-emerald-400 font-mono">1234</code> (Each Course Lecturer & HOD can customize their private PIN inside the portal).</p>
+        </div>
+
+        <div id="gateStudentGroup" class="hidden">
+          <label class="block text-xs text-slate-300 font-medium mb-1">Your Matriculation Number</label>
+          <input type="text" id="gateMatricInput" value="ENG/123/4567" placeholder="e.g. ENG/123/4567, UB6474386, B1222329, PG2307676" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-base sm:text-sm font-mono text-white uppercase" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
+          <div class="flex items-center gap-1.5 flex-wrap text-[11px] pt-2">
+            <span class="text-slate-500">Quick Fill:</span>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='ENG/123/4567'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono min-h-[44px]">ENG/123/4567</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='UB6474386'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono min-h-[44px]">UB6474386</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='B1222329'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono min-h-[44px]">B1222329</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='PG2307676'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono min-h-[44px]">PG2307676</button>
+          </div>
+        </div>
+
+        <button onclick="submitPortalLogin()" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+          🔓 Verify & Unlock Portal Session
+        </button>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 1: DEPARTMENT HOD COMMAND CENTER & 70% EXAM ELIGIBILITY PORTAL      -->
+    <!-- ======================================================================= -->
+    <section id="panel-hod" class="hidden space-y-6">
+      <!-- Top HOD Banner & Quick Actions -->
+      <div class="glass rounded-2xl p-5 sm:p-6 border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 text-emerald-400 text-xs font-mono uppercase tracking-wider mb-1">
+            <span>HOD Command Center • NUC / COREN 70% Attendance Enforcement</span>
+            <span id="hodSemesterPill" class="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30">First Semester</span>
+          </div>
+          <h2 id="hodDeptHeading" class="font-display text-2xl sm:text-3xl font-bold text-white">Department of Petroleum Engineering (PEE)</h2>
+          <div class="flex items-center gap-2 flex-wrap mt-1">
+            <p id="hodNameSub" class="text-sm text-slate-300">Head of Department: Prof. E. O. Adewale</p>
+            <button onclick="openEditHodProfileModal()" class="no-print px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition min-h-[44px]">
+              ⚙️ Edit HOD Name & PIN
+            </button>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5 no-print">
+          <button onclick="openModal('deptModal')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition min-h-[44px]">
+            + Register Engineering Dept
+          </button>
+          <button onclick="openAddCourseModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition min-h-[44px]">
+            + Add 1st/2nd Sem Course
+          </button>
+          <button onclick="exportHodCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition min-h-[44px]">
+            ⬇ Export Exam Eligibility CSV
+          </button>
+          <button onclick="window.print()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-emerald-500/20 min-h-[44px]">
+            🖨️ Print Official HOD Exam Clearance List
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary KPI Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass rounded-xl p-4 border border-slate-800">
+          <p class="text-xs text-slate-400 uppercase font-mono">Departmental Courses</p>
+          <p id="kpiCoursesCount" class="font-display text-3xl font-bold text-white mt-1">0</p>
+          <p id="kpiSemesterSub" class="text-[11px] text-slate-500 mt-1">300L, 400L & 500L Core Courses</p>
+        </div>
+        <div class="glass rounded-xl p-4 border border-slate-800">
+          <p class="text-xs text-slate-400 uppercase font-mono">Minimum Exam Threshold</p>
+          <p class="font-display text-3xl font-bold text-emerald-400 mt-1">70.0%</p>
+          <p class="text-[11px] text-slate-500 mt-1">Strict Biometric Verification</p>
+        </div>
+        <div class="glass rounded-xl p-4 border border-emerald-500/30 bg-emerald-950/15">
+          <p class="text-xs text-emerald-300 uppercase font-mono">Cleared for Exams (≥70%)</p>
+          <p id="kpiEligibleCount" class="font-display text-3xl font-bold text-emerald-400 mt-1">0</p>
+          <p class="text-[11px] text-emerald-400/70 mt-1">Qualified to sit for examination</p>
+        </div>
+        <div class="glass rounded-xl p-4 border border-rose-500/30 bg-rose-950/15">
+          <p class="text-xs text-rose-300 uppercase font-mono">Barred from Exam (<70%)</p>
+          <p id="kpiBarredCount" class="font-display text-3xl font-bold text-rose-400 mt-1">0</p>
+          <p class="text-[11px] text-rose-400/70 mt-1">Automatic HOD Exam Exclusion</p>
+        </div>
+      </div>
+
+      <!-- Filter Bar for HOD Table -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 no-print">
+        <div class="flex items-center gap-3 flex-wrap">
+          <label class="text-xs text-slate-400 font-medium">Filter Course:</label>
+          <select id="hodCourseSelect" onchange="loadHodEligibility()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-base sm:text-xs text-white focus:outline-none min-h-[44px]">
+            <option value="">All Courses in Selected Level & Semester</option>
+          </select>
+
+          <label class="text-xs text-slate-400 font-medium ml-2">Status Filter:</label>
+          <select id="hodStatusFilter" onchange="renderHodCourses()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-base sm:text-xs text-white focus:outline-none min-h-[44px]">
+            <option value="ALL">Show All Students</option>
+            <option value="BARRED">Show Only BARRED (<70%)</option>
+            <option value="ELIGIBLE">Show Only ELIGIBLE (≥70%)</option>
+          </select>
+        </div>
+        <div class="text-xs font-mono text-emerald-400" id="dbEngineBadge">
+          Connecting to Database...
+        </div>
+      </div>
+
+      <!-- Course-by-Course Eligibility Matrices -->
+      <div id="hodCoursesContainer" class="space-y-6">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 2: COURSE LECTURER PORTAL (STRICT PER-COURSE ISOLATION & CO-TEACH)  -->
+    <!-- ======================================================================= -->
+    <section id="panel-lecturer" class="hidden space-y-6">
+      <!-- Isolated Course Workspace Top Banner -->
+      <div class="glass rounded-2xl p-5 sm:p-6 border border-emerald-500/40 bg-emerald-950/10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-mono font-bold uppercase">
+              🔒 Isolated Course Workspace
+            </span>
+            <span id="lecturerCourseLevelSemPill" class="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[11px] font-mono">
+              400L • 1st Semester
+            </span>
+          </div>
+          <h2 id="lecturerIsolatedHeading" class="font-display text-2xl sm:text-3xl font-bold text-white">
+            PEE 401 — Applied Reservoir Engineering II
+          </h2>
+          <p id="lecturerIsolatedSub" class="text-xs sm:text-sm text-slate-300">
+            Assigned Lecturers: <b id="lecturerAssignedNames" class="text-white">Prof. Oyeneyin & Engr. Omoregbe</b> • Signed-In Lecturer on Duty: <b id="lecturerActiveDutyName" class="text-emerald-400">Prof. Oyeneyin</b>
+          </p>
+          <!-- Co-Lecturer Class Attribution Breakdown -->
+          <div id="lecturerCoTeachBreakdown" class="flex items-center gap-2 flex-wrap pt-1.5"></div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 no-print shrink-0">
+          <button onclick="openEditLecturerPinModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition min-h-[44px]">
+            🔐 Customize Course PIN & Co-Lecturers
+          </button>
+          <button onclick="exportLecturerCourseCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition min-h-[44px]">
+            ⬇ Export My Course CSV
+          </button>
+          <button onclick="lockCurrentPortal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition min-h-[44px]">
+            🔄 Switch Course / Lecturer
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left: Start New Lecture Session (Locked Strictly to This Course) -->
+        <div class="glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display text-lg font-bold text-white">Start Class Attendance Session</h3>
+            <span id="lecturerSemBadge" class="px-2 py-0.5 text-[11px] font-mono rounded bg-teal-500/20 text-teal-300">1st Semester</span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Locked strictly to your authenticated course so other lecturers' courses cannot be viewed or modified.
+          </p>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-emerald-400 font-semibold mb-1">Authenticated Course (Isolated Database)</label>
+              <select id="lecturerCourseSelect" disabled class="w-full bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-2 text-base sm:text-sm font-mono font-bold text-emerald-300 opacity-95 cursor-not-allowed min-h-[44px]"></select>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="col-span-1">
+                <label class="block text-xs text-slate-400 mb-1">Week #</label>
+                <input type="number" id="sessionWeekInput" value="6" min="1" max="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white font-mono min-h-[44px]" />
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs text-teal-300 font-semibold mb-1">Lecturer Taking Class Today *</label>
+                <select id="sessionStarterInput" onchange="onDutyLecturerSwitch(this.value)" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-3 py-2 text-base sm:text-sm text-white font-medium min-h-[44px]"></select>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Lecture Topic Taught Today</label>
+              <input type="text" id="sessionTopicInput" placeholder="e.g. Week 6: Pressure Transient Analysis & Well Testing" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+            </div>
+            <div class="p-3 rounded-xl bg-slate-950/90 border border-teal-500/30 space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs font-semibold text-teal-300">📍 Layer 2: Classroom GPS Geofence Radius</label>
+                <select id="sessionGeofenceRadius" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-base sm:text-xs font-mono text-emerald-300 min-h-[44px]">
+                  <option value="100">100m (Lecture Room)</option>
+                  <option value="150" selected>150m (Hall + Corridor)</option>
+                  <option value="250">250m (Faculty Complex)</option>
+                </select>
+              </div>
+              <p class="text-[11px] text-slate-400">
+                Locks session to your live lecture hall GPS coordinates + generates <b>4-Digit PIN #1 of 5</b> (2 mins per PIN • 10 mins max window).
+              </p>
+            </div>
+            <button id="launchSessionBtn" onclick="createNewLectureSession()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+              🚀 Launch Session &amp; Generate 4-Digit PIN (#1/5)
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Active & Recent Lecture Sessions for THIS Course Only -->
+        <div class="lg:col-span-2 glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 id="lecturerSessionsLogHeading" class="font-display text-lg font-bold text-white">My Course Lecture Sessions & Co-Lecturer Log</h3>
+              <p class="text-xs text-slate-400">Shows only sessions for your assigned course, clearly recording which lecturer taught and took attendance each day.</p>
+            </div>
+            <button onclick="loadSessionsList()" class="text-xs text-emerald-400 hover:underline min-h-[44px]">↻ Refresh</button>
+          </div>
+          <div id="sessionsListContainer" class="space-y-3 max-h-[420px] overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <!-- Bottom: Isolated Course Student Attendance & 70% Standing Sheet -->
+      <div id="lecturerCourseAttendanceContainer" class="space-y-4"></div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 3: LEVEL COURSE REP (MASTER KYC ENROLLMENT & CLASSMATES REGISTRY)   -->
+    <!-- ======================================================================= -->
+    <section id="panel-courserep" class="hidden space-y-6">
+      <div class="glass rounded-2xl p-5 sm:p-6 border border-emerald-500/40 bg-emerald-950/10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span id="courseRepIsolatedBadge" class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-mono font-bold uppercase">
+              🔒 Isolated 400 Level Course Rep Dashboard
+            </span>
+            <span id="courseRepDeptPill" class="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[11px] font-mono">
+              Department Master KYC Registry
+            </span>
+          </div>
+          <h2 id="courseRepHeading" class="font-display text-xl sm:text-2xl font-bold text-white">
+            400 Level Master Face KYC Enrollment &amp; Classmate Registry
+          </h2>
+          <p id="courseRepSub" class="text-xs text-slate-300">
+            Authorized Course Rep: <b id="courseRepActiveName" class="text-emerald-400">400L Course Rep</b> • Capture each <b id="courseRepLockedLevelLabel" class="text-white">400 Level</b> classmate's master 128D face KYC once. Students then sign attendance on their own phones in Tab 4!
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 shrink-0 no-print">
+          <button onclick="openEditCourseRepModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition min-h-[44px]">
+            🔐 Customize Level Rep Name &amp; PIN
+          </button>
+          <button onclick="lockCurrentPortal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition min-h-[44px]">
+            🔄 Switch Level
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left 5 Cols: Master Classmate Biometric KYC Enrollment (Single Course Rep Camera Interface) -->
+        <div class="lg:col-span-5 glass rounded-2xl p-5 border border-emerald-500/30 space-y-4">
+          <div class="flex items-center justify-between gap-2">
+            <h3 id="enrollCardTitle" class="font-display text-lg font-bold text-white">1. Master Face KYC Enrollment</h3>
+            <span id="neuralModelStatusBadge" class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-teal-500/15 text-teal-300 border border-teal-500/30">
+              128D ResNet-34 Ready
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">
+            OPay / Moniepoint-Style Master KYC: Capture the classmate's live <b>128D Neural Face Signature</b> once. During lectures, students verify against this exact master face using their own mobile phone camera.
+          </p>
+
+          <!-- Live Enrollment Camera + Oval KYC Frame + Captured Face Reference Preview -->
+          <div class="space-y-2">
+            <div class="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 aspect-[4/5] sm:aspect-video flex items-center justify-center">
+              <video id="enrollVideo" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+              <canvas id="enrollCanvas" width="320" height="240" class="hidden"></canvas>
+
+              <!-- OPay-Style Oval Biometric Alignment Guide Overlay -->
+              <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div class="w-36 h-44 rounded-full border-2 border-dashed border-emerald-400/50 shadow-[0_0_25px_rgba(16,185,129,0.18)]"></div>
+              </div>
+
+              <div id="enrollCameraPlaceholder" class="relative z-10 text-center p-4 space-y-2.5 bg-slate-950/85 rounded-xl">
+                <div class="w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-2xl">
+                  🤳
+                </div>
+                <p class="text-xs font-semibold text-white">Master KYC Enrollment Camera</p>
+                <p class="text-[11px] text-slate-400 max-w-xs mx-auto">
+                  Center classmate's face inside the oval guide. Extracts 68 landmarks &amp; a 128D ResNet-34 neural vector.
+                </p>
+                <button type="button" onclick="startEnrollCamera()" class="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-xs font-semibold text-emerald-300 border border-emerald-500/40 transition min-h-[44px]">
+                  📷 1. Activate Enrollment Camera
+                </button>
+              </div>
+              <img id="enrollFallbackImg" class="hidden w-full h-full object-cover" alt="Enroll Camera Photo" />
+
+              <div class="scan-line pointer-events-none"></div>
+              <div id="enrollCaptureOverlay" class="absolute bottom-2.5 left-2.5 right-2.5 hidden px-3 py-1.5 rounded-xl bg-slate-950/95 border border-emerald-500/50 flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <img id="enrollFacePreviewImg" src="" alt="Captured Face" class="w-9 h-9 rounded-lg object-cover border border-emerald-400" />
+                  <span id="enrollFaceStatusBadge" class="text-[11px] font-mono text-emerald-300 font-semibold">✓ 128D Master KYC Captured</span>
+                </div>
+                <span class="text-[10px] font-mono text-teal-400">68 Landmarks Locked</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button type="button" onclick="startEnrollCamera()" class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition min-h-[44px]">
+                📷 Open Camera
+              </button>
+              <button type="button" onclick="captureEnrollmentFaceSnapshot()" id="captureEnrollFaceBtn" class="py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 transition min-h-[44px]">
+                📸 2. Capture Master KYC Face
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label class="block text-xs text-emerald-400 font-semibold mb-1">Authenticated Level</label>
+                <select id="enrollLevel" disabled class="w-full bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-2 text-base sm:text-xs text-emerald-300 font-mono font-bold cursor-not-allowed min-h-[44px]">
+                  <option value="300">🔒 300 Level</option>
+                  <option value="400" selected>🔒 400 Level</option>
+                  <option value="500">🔒 500 Level</option>
+                </select>
+              </div>
+              <div class="col-span-2">
+                <label class="block text-xs text-slate-400 mb-1">Matric No (Any Official Format)</label>
+                <input type="text" id="enrollMatric" placeholder="ENG/123/4567, UB6474386, B1222329, PG2307676" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white uppercase min-h-[44px]" />
+                <p class="text-[10px] text-slate-500 mt-0.5">Supports ENG/123/4567, UB..., B..., PG..., etc.</p>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Student Full Name</label>
+              <input type="text" id="enrollName" placeholder="e.g. Chukwudi Okafor" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white min-h-[44px]" />
+            </div>
+            <div>
+              <label class="block text-xs text-emerald-400 font-medium mb-1">Institutional Email Address (Required for HOD Warnings) *</label>
+              <input type="email" id="enrollEmail" placeholder="e.g. chukwudi.okafor@eng.uniben.edu" required class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white min-h-[44px]" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Enrolling Level Course Rep Name</label>
+              <input type="text" id="enrollRepName" value="400L Course Rep" readonly class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-base sm:text-xs text-emerald-300 font-medium min-h-[44px]" />
+            </div>
+
+            <button onclick="enrollStudentBiometric()" class="w-full py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition shadow-lg shadow-teal-500/20">
+              🧬 3. Lock Master KYC Face &amp; Enroll Classmate
+            </button>
+          </div>
+
+          <!-- Hidden legacy kiosk elements kept so offline sync & state helpers never throw null errors -->
+          <div class="hidden">
+            <span id="kioskLevelTitle"></span>
+            <select id="kioskSessionSelect"></select>
+            <select id="kioskStudentSelect"></select>
+            <video id="kioskVideo"></video>
+            <canvas id="kioskCanvas"></canvas>
+            <div id="kioskCameraPlaceholder"></div>
+            <img id="kioskFallbackImg" alt="" />
+            <div id="kioskLastMatchOverlay"><span id="kioskMatchText"></span></div>
+            <span id="repQueueCount">0</span>
+            <div id="offlineQueueList"></div>
+          </div>
+        </div>
+
+        <!-- Right 7 Cols: Isolated Level Enrolled Classmates Master KYC Registry -->
+        <div class="lg:col-span-7 space-y-4">
+          <div id="courseRepLevelStudentsContainer" class="space-y-4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- TAB 4: STUDENT OWN-PHONE LIVE FACE KYC VERIFICATION & 70% TRACKER       -->
+    <!-- ======================================================================= -->
+    <section id="panel-student" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left 7 Cols: Student Live 70% Status Lookup -->
+        <div class="lg:col-span-7 glass rounded-2xl p-5 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <h3 class="font-display text-lg font-bold text-white">My 70% Exam Eligibility Status</h3>
+            <span id="studentSemBadge" class="px-2.5 py-0.5 rounded-full text-xs font-mono bg-teal-500/20 text-teal-300 border border-teal-500/30">First Semester</span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Authenticated Student Profile session. Your attendance percentage across your 1st and 2nd Semester departmental courses is shown below:
+          </p>
+
+          <div class="flex flex-wrap gap-2">
+            <input type="text" id="studentLookupInput" value="ENG/123/4567" readonly class="flex-1 bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 text-base sm:text-sm font-mono text-emerald-300 uppercase min-h-[44px]" />
+            <button onclick="lockCurrentPortal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition min-h-[44px]">
+              Switch Student Account
+            </button>
+          </div>
+
+          <div id="studentPersonalResult" class="space-y-3 pt-2"></div>
+        </div>
+
+        <!-- Right 5 Cols: Student Own-Phone OPay-Style Live Facial KYC Verification -->
+        <div class="lg:col-span-5 glass rounded-2xl p-5 border border-emerald-500/40 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-mono uppercase text-emerald-400">OPay / Moniepoint-Grade Biometric KYC</span>
+              <h3 class="font-display text-lg font-bold text-white">Own-Phone Live Face Attendance Verification</h3>
+            </div>
+            <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">L2 &le; 0.42</span>
+          </div>
+          <p class="text-xs text-slate-400">
+            Sign in using your own smartphone camera. Your live face must match the <b>Master 128D KYC Face</b> captured by your Level Course Rep (<code class="text-emerald-300">L2 &le; 0.42</code> &amp; <code class="text-emerald-300">Similarity &ge; 90.5%</code>). No gallery uploads or proxy sign-ins allowed.
+          </p>
+
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Active Class Session (Only Live Unlocked Sessions)</label>
+              <select id="studentSelfSessionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white min-h-[44px]"></select>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">Authenticated Matric Number</label>
+                <input type="text" id="studentSelfMatric" value="ENG/123/4567" readonly class="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-emerald-400 uppercase min-h-[44px]" />
+              </div>
+              <div>
+                <label class="block text-xs text-amber-300 font-semibold mb-1">🔑 4-Digit Classroom PIN *</label>
+                <input type="text" id="studentClassroomPinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 4829" class="w-full bg-slate-950 border border-amber-500/50 focus:border-emerald-400 rounded-xl px-3 py-2 text-base sm:text-sm font-mono font-bold tracking-[0.25em] text-amber-300 text-center min-h-[44px]" />
+              </div>
+            </div>
+            <div id="studentGeofenceStatusBar" class="px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between text-[11px] font-mono">
+              <span class="text-teal-300">📍 Layer 2 GPS Geofence + Layer 1 PIN (2-Min Expiry)</span>
+              <span id="studentGpsBadge" class="text-slate-400">Verified on Sign-In</span>
+            </div>
+
+            <!-- Live Student Smartphone Camera Viewfinder with OPay-Style Oval Liveness Ring -->
+            <div class="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-emerald-500/40 aspect-[4/5] sm:aspect-video flex items-center justify-center">
+              <video id="studentVideo" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+              <canvas id="studentCanvas" width="320" height="240" class="hidden"></canvas>
+              <img id="studentFallbackImg" class="hidden w-full h-full object-cover" alt="" />
+
+              <!-- OPay-Style Oval Liveness Alignment Ring -->
+              <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div id="studentLivenessRing" class="w-36 h-44 rounded-full border-2 border-dashed border-emerald-400/60 shadow-[0_0_30px_rgba(16,185,129,0.22)] transition-all duration-300"></div>
+              </div>
+
+              <div id="studentCameraPlaceholder" class="relative z-10 text-center p-5 space-y-2.5 bg-slate-950/85 rounded-xl">
+                <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-2xl">
+                  🤳
+                </div>
+                <p class="text-xs font-semibold text-white">Personal Smartphone Live Face Scanner</p>
+                <p class="text-[11px] text-slate-400 max-w-xs mx-auto">
+                  Position your face inside the oval ring in good lighting. Multi-frame liveness &amp; 1:N anti-impersonation are enforced.
+                </p>
+                <button type="button" onclick="startStudentCamera()" class="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-xs font-semibold text-emerald-300 border border-emerald-500/40 transition min-h-[44px]">
+                  📷 1. Open My Phone Camera
+                </button>
+              </div>
+
+              <div class="scan-line pointer-events-none"></div>
+              <div id="studentLivenessPrompt" class="absolute top-2.5 left-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-slate-950/85 border border-slate-700 text-[10px] font-mono text-emerald-400 flex items-center justify-between">
+                <span>ACTIVE LIVENESS + 1:1 KYC MATCH</span>
+                <span>STRICT L2 &le; 0.42</span>
+              </div>
+              <div id="studentLastMatchOverlay" class="absolute bottom-2.5 left-2.5 right-2.5 hidden px-3 py-2 rounded-xl bg-emerald-950/95 border border-emerald-500/50 text-xs text-emerald-200 flex items-center justify-between">
+                <span id="studentMatchText">Verified!</span>
+                <span id="studentMatchPct" class="font-mono font-bold text-emerald-400">96.4% MATCH</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button type="button" onclick="startStudentCamera()" class="col-span-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition">
+                📷 Camera On
+              </button>
+              <button type="button" onclick="studentPasskeyCheckIn()" id="studentLiveScanBtn" class="col-span-2 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20">
+                <span>🧬</span> 2. Verify My Face &amp; Sign In
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: EDIT HOD PROFILE & SECURITY PIN -->
+  <div id="editHodModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-emerald-500/40 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-mono uppercase text-emerald-400">Department HOD Security</span>
+          <h3 class="font-display text-lg font-bold text-white">Customize HOD Name & Security PIN</h3>
+        </div>
+        <button onclick="closeModal('editHodModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">Replace the default/demo HOD name for this department and optionally set a new HOD Security PIN.</p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Official Head of Department (HOD) Name</label>
+          <input type="text" id="editHodNameInput" placeholder="e.g. Prof. E. O. Adewale" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Official HOD Institutional Email</label>
+          <input type="email" id="editHodEmailInput" placeholder="e.g. hod.pee@eng.uniben.edu" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">New HOD Security PIN (Leave blank to keep current PIN)</label>
+          <input type="password" id="editHodPinInput" placeholder="Enter new 4+ digit PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
+        </div>
+        <button onclick="submitEditHodProfile()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
+          💾 Save HOD Profile & PIN
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTER NEW ENGINEERING DEPARTMENT -->
+  <div id="deptModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-slate-700 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-display text-lg font-bold text-white">Register Engineering Department</h3>
+        <button onclick="closeModal('deptModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Department Short Code (3 Letters)</label>
+          <input type="text" id="newDeptCode" placeholder="e.g. BME" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white uppercase min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Full Department Name</label>
+          <input type="text" id="newDeptName" placeholder="e.g. Biomedical Engineering" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Head of Department (HOD) Name</label>
+          <input type="text" id="newDeptHod" placeholder="e.g. Prof. S. A. Lawal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">HOD Security PIN for this Department</label>
+          <input type="password" id="newDeptPin" value="1234" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
+        </div>
+        <button onclick="submitNewDepartment()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
+          Save Department to Registry
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD NEW 300L/400L/500L DEPARTMENTAL COURSE (WITH SEMESTER) -->
+  <div id="courseModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-slate-700 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-display text-lg font-bold text-white">Add 300L / 400L / 500L Core Course</h3>
+        <button onclick="closeModal('courseModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Course Code</label>
+            <input type="text" id="newCourseCode" placeholder="e.g. PEE 405" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white uppercase min-h-[44px]" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Level</label>
+            <select id="newCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white font-mono min-h-[44px]">
+              <option value="300">300 Level</option>
+              <option value="400" selected>400 Level</option>
+              <option value="500">500 Level</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-teal-300 font-semibold mb-1">Semester *</label>
+            <select id="newCourseSemester" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-2.5 py-2 text-base sm:text-xs text-white font-mono min-h-[44px]">
+              <option value="1">1st Semester</option>
+              <option value="2">2nd Semester</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Course Title</label>
+          <input type="text" id="newCourseTitle" placeholder="e.g. Directional Drilling & Well Completion" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Course Lecturer(s) (Separate Co-Lecturers with &amp; or ,)</label>
+          <input type="text" id="newCourseLecturer" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Initial Course Lecturer Access PIN</label>
+          <input type="password" id="newCoursePin" value="1234" placeholder="Default: 1234" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white min-h-[44px]" />
+        </div>
+        <button onclick="submitNewCourse()" id="addCourseSubmitBtn" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
+          Add Departmental Course
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: HOD EDIT EXISTING COURSE DETAILS (WITH SEMESTER & DELETE) -->
+  <div id="editCourseModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-emerald-500/40 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-mono uppercase text-emerald-400">HOD Course Management</span>
+          <h3 class="font-display text-lg font-bold text-white">Edit or Remove Course</h3>
+        </div>
+        <button onclick="closeModal('editCourseModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">Edit the course details or co-lecturers assigned to this course:</p>
+      <input type="hidden" id="editCourseId" />
+      <div class="space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Course Code</label>
+            <input type="text" id="editCourseCode" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white uppercase min-h-[44px]" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Level</label>
+            <select id="editCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white font-mono min-h-[44px]">
+              <option value="300">300 Level</option>
+              <option value="400">400 Level</option>
+              <option value="500">500 Level</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-teal-300 font-semibold mb-1">Semester</label>
+            <select id="editCourseSemester" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-2.5 py-2 text-base sm:text-xs text-white font-mono min-h-[44px]">
+              <option value="1">1st Semester</option>
+              <option value="2">2nd Semester</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Course Title</label>
+          <input type="text" id="editCourseTitle" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Assigned Course Lecturer(s) (Separate Co-Lecturers with &amp; or ,)</label>
+          <input type="text" id="editCourseLecturer" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Reset Course Lecturer PIN (Leave blank to keep current PIN)</label>
+          <input type="password" id="editCoursePin" placeholder="Enter new 4+ digit Course PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white min-h-[44px]" />
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+          <button onclick="submitEditCourse()" class="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+            💾 Save Changes
+          </button>
+          <button onclick="deleteCurrentEditingCourse()" class="px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs transition">
+            🗑️ Delete Course
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LECTURER CUSTOMIZE PRIVATE COURSE PIN & CO-LECTURERS -->
+  <div id="editLecturerPinModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-emerald-500/40 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-mono uppercase text-emerald-400">Course Data Isolation &amp; Privacy</span>
+          <h3 id="editLecturerPinModalTitle" class="font-display text-lg font-bold text-white">Customize Private Course PIN</h3>
+        </div>
+        <button onclick="closeModal('editLecturerPinModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">
+        Set a private Access PIN for this course so only the assigned lecturer(s) for this course can unlock its workspace and attendance data.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Assigned Lecturer(s) for This Course (Separate Co-Lecturers with &amp; or ,)</label>
+          <input type="text" id="editLecturerCourseNamesInput" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-emerald-400 font-semibold mb-1">New Private Course Lecturer PIN (4+ digits/characters) *</label>
+          <input type="password" id="editLecturerCoursePinInput" placeholder="Enter private PIN for this course" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
+        </div>
+        <button onclick="submitLecturerCoursePinUpdate()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+          🔐 Save Private Course PIN &amp; Co-Lecturers
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LEVEL COURSE REP CUSTOMIZE NAME, MATRIC & PRIVATE PIN -->
+  <div id="editCourseRepModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass rounded-2xl max-w-md w-full p-6 border border-emerald-500/40 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-mono uppercase text-emerald-400">Level Course Rep Security</span>
+          <h3 id="editCourseRepModalTitle" class="font-display text-lg font-bold text-white">Customize Level Course Rep Profile &amp; PIN</h3>
+        </div>
+        <button onclick="closeModal('editCourseRepModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">
+        Customize the official Course Rep Name, Matric Number, and private Security PIN for this specific level so other levels cannot access your level's dashboard.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Level Course Rep Full Name</label>
+          <input type="text" id="editCourseRepNameInput" placeholder="e.g. Emmanuel Nsofor" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Level Course Rep Matric No</label>
+          <input type="text" id="editCourseRepMatricInput" placeholder="e.g. ENG/123/4567" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white uppercase min-h-[44px]" />
+        </div>
+        <div>
+          <label class="block text-xs text-emerald-400 font-semibold mb-1">New Level Course Rep PIN (Leave blank to keep current PIN)</label>
+          <input type="password" id="editCourseRepPinInput" placeholder="Enter new 4+ digit PIN for this level" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
+        </div>
+        <button onclick="submitEditCourseRepProfile()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
+          💾 Save Level Course Rep Profile &amp; PIN
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // STATE, SECURITY TOKENS & OFFLINE-FIRST STORAGE ENGINE
+    // =========================================================================
+    let state = {
+      activeTab: 'hod',
+      departments: [],
+      selectedDeptId: 1,
+      selectedLevel: 400,    // 300, 400, 500, or 0 (ALL)
+      selectedSemester: 1,   // 1 = First Semester, 2 = Second Semester, 0 = Both
+      courses: [],
+      allDeptCourses: [],    // All courses in the selected department (for the Lecturer Course Gate)
+      courseReps: [],        // 300L, 400L, and 500L Course Reps for the selected department
+      students: [],
+      allDeptStudents: [],
+      sessions: [],
+      hodReport: null,
+      lecturerCourseReport: null,
+      simulatedOffline: false,
+      offlineQueue: JSON.parse(localStorage.getItem('eng_offline_attendance_queue') || '[]'),
+      cachedTemplates: JSON.parse(localStorage.getItem('eng_cached_biometric_templates') || '{}'),
+      roleSessions: JSON.parse(sessionStorage.getItem('eng_role_sessions_v1') || '{}'),
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    function parseLecturersClient(raw) {
+      if (!raw) return ['Course Lecturer'];
+      const parts = String(raw).split(/\s*(?:,|&|\/|;|\band\b)\s*/i).map(s => s.trim()).filter(Boolean);
+      return parts.length ? parts : [String(raw).trim()];
+    }
+
+    function getActiveRoleSession(role) {
+      const sess = state.roleSessions[role];
+      if (!sess) return null;
+      if (role !== 'student' && sess.department_id !== state.selectedDeptId) {
+        return null;
+      }
+      // Require course_id on lecturer sessions so old generic tokens re-authenticate per course
+      if (role === 'lecturer' && !sess.course_id) {
+        return null;
+      }
+      // Require level (300, 400, or 500) on courserep sessions
+      if (role === 'courserep' && ![300, 400, 500].includes(Number(sess.level))) {
+        return null;
+      }
+      return sess;
+    }
+
+    function authHeaders(role) {
+      const sess = getActiveRoleSession(role) || getActiveRoleSession('hod');
+      const headers = { 'Content-Type': 'application/json' };
+      if (sess && sess.token) {
+        headers['Authorization'] = `Bearer ${sess.token}`;
+      }
+      return headers;
+    }
+
+    function triggerHapticFeedback(pattern = 15) {
+      try {
+        if (navigator && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(pattern);
+        }
+      } catch (_) {}
+    }
+
+    function showToast(msg, type = 'success') {
+      const box = document.getElementById('toastBox');
+      box.className = 'fixed bottom-20 sm:bottom-5 right-3 left-3 sm:left-auto sm:right-5 z-50 max-w-md px-4 py-3 rounded-xl shadow-2xl border text-xs sm:text-sm font-medium transition-all duration-300 ';
+      if (type === 'error') {
+        box.className += 'bg-rose-950/95 border-rose-500 text-rose-200';
+        triggerHapticFeedback([35, 50, 35]);
+      } else if (type === 'warn') {
+        box.className += 'bg-amber-950/95 border-amber-500 text-amber-200';
+        triggerHapticFeedback(20);
+      } else {
+        box.className += 'bg-emerald-950/95 border-emerald-500 text-emerald-200';
+        triggerHapticFeedback(15);
+      }
+      box.textContent = msg;
+      box.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => box.classList.add('hidden'), 4200);
+    }
+
+    function isOfflineMode() {
+      return state.simulatedOffline || !navigator.onLine;
+    }
+
+    function toggleSimulatedOffline() {
+      state.simulatedOffline = !state.simulatedOffline;
+      updateNetworkUI();
+      if (!state.simulatedOffline && state.offlineQueue.length > 0) {
+        showToast('Internet connection restored! Syncing queued attendance records to HOD...', 'success');
+        syncOfflineQueueNow();
+      } else if (state.simulatedOffline) {
+        showToast('Switched to Lecture Hall Offline Mode. Biometric check-ins will queue locally on device.', 'warn');
+      }
+    }
+
+    function updateNetworkUI() {
+      const btn = document.getElementById('networkBadgeBtn');
+      const mobBtn = document.getElementById('networkBadgeBtnMobile');
+      const dot = document.getElementById('networkDot');
+      const txt = document.getElementById('networkStatusText');
+      const syncBtn = document.getElementById('syncQueueBtn');
+      const countBadge = document.getElementById('offlineCountBadge');
+      const repQueueCount = document.getElementById('repQueueCount');
+      const queueList = document.getElementById('offlineQueueList');
+
+      const qLen = state.offlineQueue.length;
+      countBadge.textContent = qLen;
+      repQueueCount.textContent = qLen;
+
+      if (qLen > 0) {
+        syncBtn.classList.remove('hidden');
+        syncBtn.classList.add('flex');
+        queueList.innerHTML = state.offlineQueue.map((item, i) =>
+          `<div class="py-1 border-b border-slate-800/80 flex justify-between">
+            <span>${i + 1}. <b>${item.matric_no}</b> (${item.session_uid})</span>
+            <span class="text-amber-400">PENDING SYNC</span>
+          </div>`
+        ).join('');
+      } else {
+        syncBtn.classList.add('hidden');
+        syncBtn.classList.remove('flex');
+        queueList.innerHTML = 'No offline records waiting. Toggle "Online" in top bar to test offline lecture hall capture!';
+      }
+
+      if (isOfflineMode()) {
+        btn.className = 'hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-amber-500/15 border-amber-500/40 text-amber-300';
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        txt.textContent = 'Offline Mode';
+        if (mobBtn) {
+          mobBtn.className = 'px-2.5 py-1.5 rounded-lg text-[11px] font-mono border bg-amber-500/15 border-amber-500/40 text-amber-300';
+          mobBtn.textContent = 'Offline';
+        }
+      } else {
+        btn.className = 'hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
+        txt.textContent = 'Online';
+        if (mobBtn) {
+          mobBtn.className = 'px-2.5 py-1.5 rounded-lg text-[11px] font-mono border bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+          mobBtn.textContent = 'Online';
+        }
+      }
+    }
+
+    // =========================================================================
+    // ROLE PORTAL SECURITY & PER-COURSE / PER-LEVEL ISOLATION GATE
+    // =========================================================================
+    function populateGateLecturerCourses() {
+      const courseSel = document.getElementById('gateLecturerCourseSelect');
+      if (!courseSel) return;
+      const list = state.allDeptCourses.length ? state.allDeptCourses : state.courses;
+      const prevVal = courseSel.value;
+      courseSel.innerHTML = list.map(c =>
+        `<option value="${c.id}">${c.course_code} — ${c.course_title} (${c.level}L • ${c.semester === 2 ? '2nd Sem' : '1st Sem'}) [${c.lecturer_name}]</option>`
+      ).join('');
+      if (prevVal && list.some(c => String(c.id) === String(prevVal))) {
+        courseSel.value = prevVal;
+      } else {
+        const pee401 = list.find(c => c.course_code === 'PEE 401');
+        if (pee401) courseSel.value = String(pee401.id);
+      }
+      onGateLecturerCourseChange();
+    }
+
+    function onGateLecturerCourseChange() {
+      const courseSel = document.getElementById('gateLecturerCourseSelect');
+      const nameSel = document.getElementById('gateLecturerNameSelect');
+      if (!courseSel || !nameSel) return;
+      const list = state.allDeptCourses.length ? state.allDeptCourses : state.courses;
+      const selectedCourse = list.find(c => String(c.id) === String(courseSel.value));
+      const lecturers = selectedCourse
+        ? (selectedCourse.assigned_lecturers || parseLecturersClient(selectedCourse.lecturer_name))
+        : ['Course Lecturer'];
+      nameSel.innerHTML = lecturers.map(l =>
+        `<option value="${l.replace(/"/g, '&quot;')}">👨‍🏫 ${l} (${selectedCourse ? selectedCourse.course_code : ''})</option>`
+      ).join('');
+    }
+
+    function populateGateCourseRepLevels() {
+      const lvlSel = document.getElementById('gateCourseRepLevelSelect');
+      if (!lvlSel) return;
+      const prevVal = lvlSel.value || String(state.selectedLevel || 400);
+      const levels = [300, 400, 500];
+      lvlSel.innerHTML = levels.map(lvl => {
+        const repObj = state.courseReps.find(r => Number(r.level) === lvl);
+        const repLabel = repObj ? `${repObj.full_name} • ${repObj.students_count} students enrolled` : `${lvl}L Course Rep`;
+        return `<option value="${lvl}">🎓 ${lvl} Level Course Rep Dashboard (${repLabel})</option>`;
+      }).join('');
+      if (levels.includes(Number(prevVal))) {
+        lvlSel.value = String(prevVal);
+      } else {
+        lvlSel.value = '400';
+      }
+    }
+
+    function renderSecurityState() {
+      const role = state.activeTab;
+      const sess = getActiveRoleSession(role);
+      const currDept = state.departments.find(d => d.id === state.selectedDeptId);
+      const deptLabel = currDept ? `${currDept.name} (${currDept.code})` : 'Engineering';
+
+      // Update lock icons on all 4 tabs (both desktop header tabs and mobile bottom thumb-zone bar)
+      ['hod', 'lecturer', 'courserep', 'student'].forEach(r => {
+        const isUnlocked = Boolean(getActiveRoleSession(r));
+        const iconEl = document.getElementById(`lockIcon-${r}`);
+        if (iconEl) iconEl.textContent = isUnlocked ? '🔓' : '🔒';
+        const mobIconEl = document.getElementById(`mobLockIcon-${r}`);
+        if (mobIconEl) mobIconEl.textContent = isUnlocked ? '🔓' : '🔒';
+      });
+
+      const gateCard = document.getElementById('securityGateCard');
+      const authLabel = document.getElementById('activeAuthLabel');
+      const logoutBtn = document.getElementById('logoutRoleBtn');
+
+      if (sess) {
+        gateCard.classList.add('hidden');
+        ['hod', 'lecturer', 'courserep', 'student'].forEach(t => {
+          document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== role);
+        });
+        authLabel.innerHTML = `🔓 Signed in: <b class="text-emerald-400">${sess.actor_name}</b>`;
+        logoutBtn.classList.remove('hidden');
+
+        if (role === 'lecturer') {
+          renderIsolatedLecturerWorkspace();
+        } else if (role === 'courserep') {
+          renderIsolatedCourseRepWorkspace();
+        } else if (role === 'student') {
+          document.getElementById('studentLookupInput').value = sess.matric_no;
+          document.getElementById('studentSelfMatric').value = sess.matric_no;
+          lookupStudentDashboard();
+        }
+      } else {
+        // Hide all panels and display the Role Security Gate
+        ['hod', 'lecturer', 'courserep', 'student'].forEach(t => {
+          document.getElementById(`panel-${t}`).classList.add('hidden');
+        });
+        gateCard.classList.remove('hidden');
+        authLabel.innerHTML = `<span class="text-amber-400">🔒 Portal Locked</span>`;
+        logoutBtn.classList.add('hidden');
+
+        const lectGroup = document.getElementById('gateLecturerGroup');
+        const repGroup = document.getElementById('gateCourseRepGroup');
+        const pinGroup = document.getElementById('gatePinGroup');
+        const studentGroup = document.getElementById('gateStudentGroup');
+        const title = document.getElementById('gateTitle');
+        const sub = document.getElementById('gateSubtitle');
+        const badge = document.getElementById('gateRoleBadge');
+        const pinLabel = document.getElementById('gatePinLabel');
+
+        if (role === 'hod') {
+          badge.textContent = `HOD Security Layer • ${deptLabel}`;
+          title.textContent = `Unlock Department HOD Dashboard`;
+          sub.textContent = `Only the Head of Department for ${deptLabel} can add/edit/delete courses or modify HOD settings.`;
+          pinLabel.textContent = `Department HOD Security PIN`;
+          lectGroup.classList.add('hidden');
+          repGroup.classList.add('hidden');
+          pinGroup.classList.remove('hidden');
+          studentGroup.classList.add('hidden');
+        } else if (role === 'lecturer') {
+          badge.textContent = `Isolated Course Lecturer Security • ${deptLabel}`;
+          title.textContent = `Unlock Your Assigned Course Workspace`;
+          sub.textContent = `Select your assigned course and your lecturer name below. You will only see and control your own course's database.`;
+          pinLabel.textContent = `3. Enter Course Lecturer Security PIN`;
+          populateGateLecturerCourses();
+          lectGroup.classList.remove('hidden');
+          repGroup.classList.add('hidden');
+          pinGroup.classList.remove('hidden');
+          studentGroup.classList.add('hidden');
+        } else if (role === 'courserep') {
+          badge.textContent = `Isolated Level Course Rep Security • ${deptLabel}`;
+          title.textContent = `Unlock Level Course Rep Dashboard`;
+          sub.textContent = `Choose the level (300L, 400L, or 500L) you want to open the dashboard for, then enter that level's Course Rep PIN.`;
+          pinLabel.textContent = `2. Enter Level Course Rep Security PIN`;
+          populateGateCourseRepLevels();
+          lectGroup.classList.add('hidden');
+          repGroup.classList.remove('hidden');
+          pinGroup.classList.remove('hidden');
+          studentGroup.classList.add('hidden');
+        } else if (role === 'student') {
+          badge.textContent = `Student Profile Security Layer`;
+          title.textContent = `Sign In to Student Profile Portal`;
+          sub.textContent = `Enter your enrolled Matriculation Number to view your personal 70% exam eligibility and verify your phone Passkey.`;
+          lectGroup.classList.add('hidden');
+          repGroup.classList.add('hidden');
+          pinGroup.classList.add('hidden');
+          studentGroup.classList.remove('hidden');
+        }
+      }
+    }
+
+    async function submitPortalLogin() {
+      const role = state.activeTab;
+      const pin = document.getElementById('gatePinInput').value.trim();
+      const matric_no = document.getElementById('gateMatricInput').value.trim().toUpperCase();
+      const course_id = role === 'lecturer'
+        ? parseInt(document.getElementById('gateLecturerCourseSelect').value, 10)
+        : undefined;
+      const lecturer_name = role === 'lecturer'
+        ? document.getElementById('gateLecturerNameSelect').value
+        : undefined;
+      const level = role === 'courserep'
+        ? parseInt(document.getElementById('gateCourseRepLevelSelect').value, 10)
+        : (state.selectedLevel || 400);
+
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role,
+          department_id: state.selectedDeptId,
+          pin: role !== 'student' ? pin : undefined,
+          matric_no: role === 'student' ? matric_no : undefined,
+          level,
+          course_id,
+          lecturer_name
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return showToast(data.detail || 'Authentication failed', 'error');
+      }
+
+      state.roleSessions[role] = data;
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+      document.getElementById('gatePinInput').value = '';
+      showToast(data.message, 'success');
+
+      // When a Level Course Rep unlocks a level, automatically direct the global level view to that exact level!
+      if (role === 'courserep' && data.level) {
+        state.selectedLevel = Number(data.level);
+        [300, 400, 500, 0].forEach(l => {
+          const b = document.getElementById(`lvlBtn-${l}`);
+          if (b) {
+            b.className = l === state.selectedLevel
+              ? 'px-2.5 py-1 rounded-md transition bg-emerald-500 text-slate-950 font-bold'
+              : 'px-2.5 py-1 rounded-md transition text-slate-300 hover:text-white';
+          }
+        });
+      }
+
+      renderSecurityState();
+      await refreshAllData();
+    }
+
+    function lockCurrentPortal() {
+      delete state.roleSessions[state.activeTab];
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+      showToast('Portal session locked.', 'warn');
+      renderSecurityState();
+    }
+
+    // =========================================================================
+    // ROLE NAVIGATION, SEMESTER & LEVEL FILTERS
+    // =========================================================================
+    function switchRoleTab(tab) {
+      state.activeTab = tab;
+      triggerHapticFeedback(10);
+      ['hod', 'lecturer', 'courserep', 'student'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        if (btn) {
+          if (t === tab) {
+            btn.className = 'role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
+          } else {
+            btn.className = 'role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white';
+          }
+        }
+        const mobBtn = document.getElementById(`mob-tab-${t}`);
+        if (mobBtn) {
+          if (t === tab) {
+            mobBtn.className = 'flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
+          } else {
+            mobBtn.className = 'flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400';
+          }
+        }
+      });
+      renderSecurityState();
+    }
+
+    function setGlobalSemester(sem) {
+      state.selectedSemester = sem;
+      triggerHapticFeedback(10);
+      [1, 2, 0].forEach(s => {
+        const b = document.getElementById(`semBtn-${s}`);
+        if (s === sem) {
+          b.className = 'px-2.5 py-1.5 rounded-lg transition bg-teal-500 text-slate-950 font-bold';
+        } else {
+          b.className = 'px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white';
+        }
+      });
+      const semText = sem === 1 ? 'First Semester' : (sem === 2 ? 'Second Semester' : '1st & 2nd Semesters');
+      document.getElementById('hodSemesterPill').textContent = semText;
+      document.getElementById('studentSemBadge').textContent = semText;
+      document.getElementById('hodCourseSelect').value = '';
+      refreshAllData();
+    }
+
+    function setGlobalLevel(lvl) {
+      state.selectedLevel = lvl;
+      triggerHapticFeedback(10);
+      [300, 400, 500, 0].forEach(l => {
+        const b = document.getElementById(`lvlBtn-${l}`);
+        if (l === lvl) {
+          b.className = 'px-2.5 py-1.5 rounded-lg transition bg-emerald-500 text-slate-950 font-bold';
+        } else {
+          b.className = 'px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white';
+        }
+      });
+      refreshAllData();
+    }
+
+    function onGlobalFilterChange() {
+      const sel = document.getElementById('globalDeptSelect');
+      state.selectedDeptId = parseInt(sel.value, 10) || 1;
+      document.getElementById('hodCourseSelect').value = '';
+      renderSecurityState();
+      refreshAllData();
+    }
+
+    // =========================================================================
+    // API DATA LOADING
+    // =========================================================================
+    async function loadDepartments() {
+      const [res, healthRes] = await Promise.all([
+        fetch('/api/departments'),
+        fetch('/api/health')
+      ]);
+      state.departments = await res.json();
+      const health = await healthRes.json();
+      const dbBadge = document.getElementById('dbEngineBadge');
+      if (dbBadge && health.database_engine) {
+        dbBadge.innerHTML = `🗄️ Storage: <b>${health.database_engine}</b>`;
+      }
+      const sel = document.getElementById('globalDeptSelect');
+      sel.innerHTML = state.departments.map(d =>
+        `<option value="${d.id}" ${d.id === state.selectedDeptId ? 'selected' : ''}>${d.code} — ${d.name}</option>`
+      ).join('');
+    }
+
+    async function refreshAllData() {
+      try {
+        const lvlParam = state.selectedLevel ? `&level=${state.selectedLevel}` : '';
+        const semParam = state.selectedSemester ? `&semester=${state.selectedSemester}` : '';
+        const [coursesRes, allDeptCoursesRes, courseRepsRes, studentsRes, sessionsRes] = await Promise.all([
+          fetch(`/api/courses?department_id=${state.selectedDeptId}${lvlParam}${semParam}`),
+          fetch(`/api/courses?department_id=${state.selectedDeptId}`),
+          fetch(`/api/course-reps?department_id=${state.selectedDeptId}`),
+          fetch(`/api/students?department_id=${state.selectedDeptId}&include_templates=true`),
+          fetch(`/api/sessions?department_id=${state.selectedDeptId}`, { headers: authHeaders(state.activeTab) })
+        ]);
+        state.courses = await coursesRes.json();
+        state.allDeptCourses = await allDeptCoursesRes.json();
+        state.courseReps = await courseRepsRes.json();
+        const allStudents = await studentsRes.json();
+        state.allDeptStudents = allStudents;
+        state.students = state.selectedLevel
+          ? allStudents.filter(s => s.level === state.selectedLevel)
+          : allStudents;
+        state.sessions = await sessionsRes.json();
+
+        allStudents.forEach(s => {
+          if (s.face_descriptor) {
+            state.cachedTemplates[s.matric_no] = s.face_descriptor;
+          }
+        });
+        localStorage.setItem('eng_cached_biometric_templates', JSON.stringify(state.cachedTemplates));
+
+        populateDropdowns();
+        if (state.activeTab === 'lecturer' && !getActiveRoleSession('lecturer')) {
+          populateGateLecturerCourses();
+        }
+        if (state.activeTab === 'courserep' && !getActiveRoleSession('courserep')) {
+          populateGateCourseRepLevels();
+        }
+        await loadHodEligibility();
+        await renderIsolatedLecturerWorkspace();
+        renderIsolatedCourseRepWorkspace();
+        renderSessionsList();
+        if (state.activeTab === 'student' && getActiveRoleSession('student')) {
+          lookupStudentDashboard();
+        }
+      } catch (err) {
+        console.warn('Working from cached offline state:', err);
+      }
+    }
+
+    function populateDropdowns() {
+      const semLabel = state.selectedSemester === 1 ? '1st Sem' : (state.selectedSemester === 2 ? '2nd Sem' : '1st & 2nd Sem');
+      const hodCourseSel = document.getElementById('hodCourseSelect');
+      const prevCourse = hodCourseSel.value;
+      hodCourseSel.innerHTML = `<option value="">All ${state.selectedLevel ? state.selectedLevel + 'L' : '300L–500L'} (${semLabel}) Courses</option>` +
+        state.courses.map(c => `<option value="${c.id}">${c.course_code} - ${c.course_title} (${c.level}L • ${c.semester === 2 ? '2nd Sem' : '1st Sem'})</option>`).join('');
+      hodCourseSel.value = prevCourse;
+
+      // For the Course Rep Kiosk, strictly lock sessions & students to the authenticated Course Rep's level!
+      const repSess = getActiveRoleSession('courserep');
+      const effectiveKioskLevel = repSess && repSess.level ? Number(repSess.level) : state.selectedLevel;
+
+      const filteredSessions = state.sessions.filter(s => {
+        if (effectiveKioskLevel && s.level !== effectiveKioskLevel) return false;
+        if (state.selectedSemester && s.semester !== state.selectedSemester) return false;
+        return true;
+      });
+      const sessionOptions = filteredSessions.map(s =>
+        `<option value="${s.session_uid}">${s.status === 'ACTIVE' ? '🟢 ACTIVE' : '🔒 CLOSED'} ${s.course_code} (${s.level}L • Wk ${s.week_number} • Taught by ${s.started_by}) - ${s.session_uid}</option>`
+      ).join('');
+      document.getElementById('kioskSessionSelect').innerHTML = sessionOptions || `<option value="">No ${effectiveKioskLevel ? effectiveKioskLevel + 'L' : ''} sessions in this semester — start one in Lecturer tab</option>`;
+
+      // Student Portal Dropdown: Only show ACTIVE unlocked sessions (Layer 3: Locked sessions cannot be selected)
+      const studentSess = getActiveRoleSession('student');
+      const studentObj = studentSess ? state.allDeptStudents.find(st => st.matric_no === studentSess.matric_no) : null;
+      const effectiveStudentLevel = studentObj ? Number(studentObj.level) : state.selectedLevel;
+      const activeStudentSessions = state.sessions.filter(s => {
+        if (s.status !== 'ACTIVE') return false;
+        if (effectiveStudentLevel && s.level !== effectiveStudentLevel) return false;
+        if (state.selectedSemester && s.semester !== state.selectedSemester) return false;
+        return true;
+      });
+      const prevStudentSel = document.getElementById('studentSelfSessionSelect').value;
+      document.getElementById('studentSelfSessionSelect').innerHTML = activeStudentSessions.map(s => {
+        const remMin = Math.floor((s.total_remaining_seconds || 0) / 60);
+        const remSec = (s.total_remaining_seconds || 0) % 60;
+        const geoTag = s.has_geofence ? `📍 ≤${Math.round(s.geofence_radius_m || 150)}m GPS` : '📍 Class PIN';
+        return `<option value="${s.session_uid}">🟢 LIVE (${remMin}m ${remSec}s left • PIN #${s.pin_generation_count || 1}/5 • ${geoTag}) ${s.course_code} — Wk ${s.week_number} (${s.started_by})</option>`;
+      }).join('') || '<option value="">No active unlocked class session right now (Wait for Lecturer to launch in class)</option>';
+      if (prevStudentSel && activeStudentSessions.some(s => s.session_uid === prevStudentSel)) {
+        document.getElementById('studentSelfSessionSelect').value = prevStudentSel;
+      }
+
+      const kioskStudents = effectiveKioskLevel
+        ? state.allDeptStudents.filter(st => st.level === effectiveKioskLevel)
+        : state.students;
+      document.getElementById('kioskStudentSelect').innerHTML = kioskStudents.map(st =>
+        `<option value="${st.matric_no}">${st.matric_no} — ${st.full_name} (${st.level}L)</option>`
+      ).join('') || `<option value="">No ${effectiveKioskLevel || ''}L students enrolled yet — enroll on the right</option>`;
+    }
+
+    // =========================================================================
+    // HOD 70% ELIGIBILITY REPORT, COURSE EDITING & DELETION
+    // =========================================================================
+    async function loadHodEligibility() {
+      const courseId = document.getElementById('hodCourseSelect').value;
+      let url = `/api/hod/eligibility?department_id=${state.selectedDeptId}`;
+      if (state.selectedLevel) url += `&level=${state.selectedLevel}`;
+      if (state.selectedSemester) url += `&semester=${state.selectedSemester}`;
+      if (courseId) url += `&course_id=${courseId}`;
+
+      const res = await fetch(url);
+      state.hodReport = await res.json();
+
+      document.getElementById('hodDeptHeading').textContent =
+        `Department of ${state.hodReport.department.name} (${state.hodReport.department.code})`;
+      document.getElementById('hodNameSub').textContent =
+        `Head of Department: ${state.hodReport.department.hod_name}`;
+
+      document.getElementById('kpiCoursesCount').textContent = state.hodReport.summary.courses_analyzed;
+      document.getElementById('kpiEligibleCount').textContent = state.hodReport.summary.total_eligible_entries;
+      document.getElementById('kpiBarredCount').textContent = state.hodReport.summary.total_barred_entries;
+
+      renderHodCourses();
+    }
+
+    function renderHodCourses() {
+      if (!state.hodReport) return;
+      const filter = document.getElementById('hodStatusFilter').value;
+      const container = document.getElementById('hodCoursesContainer');
+
+      if (state.hodReport.courses.length === 0) {
+        const semName = state.selectedSemester === 1 ? 'First Semester' : (state.selectedSemester === 2 ? 'Second Semester' : 'Selected');
+        container.innerHTML = `<div class="glass rounded-2xl p-8 text-center text-slate-400">No ${semName} courses found for this level filter. Click <b>"+ Add 1st/2nd Sem Course"</b> above or switch between <b>1st Sem / 2nd Sem</b> in the top bar.</div>`;
+        return;
+      }
+
+      container.innerHTML = state.hodReport.courses.map(course => {
+        const filteredStudents = course.students.filter(st => {
+          if (filter === 'BARRED') return !st.exam_eligible;
+          if (filter === 'ELIGIBLE') return st.exam_eligible;
+          return true;
+        });
+
+        const rowsHtml = filteredStudents.map((st, idx) => {
+          const badgeClass = st.exam_eligible
+            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+            : 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold';
+          const barColor = st.attendance_pct >= 75 ? 'bg-emerald-500' : (st.attendance_pct >= 70 ? 'bg-amber-400' : 'bg-rose-500');
+          const instEmail = st.email || '—';
+
+          return `
+            <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition">
+              <td class="py-3 px-4 font-mono text-xs text-slate-400">${idx + 1}</td>
+              <td class="py-3 px-4 font-mono text-xs font-semibold text-white">${st.matric_no}</td>
+              <td class="py-3 px-4 text-sm text-slate-200">${st.full_name}</td>
+              <td class="py-3 px-4 font-mono text-xs text-slate-400">
+                <a href="mailto:${instEmail}?subject=HOD%20Attendance%20Warning%20(${encodeURIComponent(course.course_code)})" class="hover:text-emerald-400 underline decoration-slate-700 min-h-[44px]" title="Click to email student warning">${instEmail}</a>
+              </td>
+              <td class="py-3 px-4 text-xs">
+                ${st.biometric_enrolled
+                  ? '<span class="text-emerald-400 font-mono">✓ Enrolled</span>'
+                  : '<span class="text-amber-400 font-mono">⚠ Pending</span>'}
+              </td>
+              <td class="py-3 px-4 font-mono text-xs text-slate-300">${st.attended_classes} / ${st.total_classes}</td>
+              <td class="py-3 px-4 w-44">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div class="h-full ${barColor}" style="width: ${Math.min(100, st.attendance_pct)}%"></div>
+                  </div>
+                  <span class="font-mono text-xs font-bold ${st.exam_eligible ? 'text-emerald-400' : 'text-rose-400'}">${st.attendance_pct}%</span>
+                </div>
+              </td>
+              <td class="py-3 px-4">
+                <span class="px-2.5 py-1 rounded-full text-[11px] font-mono border ${badgeClass}">
+                  ${st.status_badge}
+                </span>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        const safeCode = course.course_code.replace(/'/g, "\\'");
+        const safeTitle = course.course_title.replace(/'/g, "\\'");
+        const safeLecturer = course.lecturer_name.replace(/'/g, "\\'");
+        const semBadge = course.semester === 2
+          ? '<span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono text-xs">2nd Semester</span>'
+          : '<span class="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 font-mono text-xs">1st Semester</span>';
+
+        const breakdownPills = (course.lecturer_breakdown || []).map(lb => {
+          const wkStr = lb.weeks && lb.weeks.length ? ` (Wk ${lb.weeks.join(', Wk ')})` : '';
+          return `<span class="px-2.5 py-0.5 rounded-lg bg-slate-800/90 border border-slate-700 text-[11px] font-mono text-teal-300">👨‍🏫 ${lb.lecturer_name}: <b>${lb.sessions_taught}</b> class${lb.sessions_taught === 1 ? '' : 'es'}${wkStr}</span>`;
+        }).join('');
+
+        return `
+          <div class="glass rounded-2xl border border-slate-800 overflow-hidden">
+            <div class="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs font-bold">${course.course_code}</span>
+                  <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-xs">${course.level} Level</span>
+                  ${semBadge}
+                  <h3 class="font-display font-bold text-base sm:text-lg text-white">${course.course_title}</h3>
+                  <button onclick="openEditCourseModal(${course.course_id}, '${safeCode}', ${course.level}, ${course.semester || 1}, '${safeTitle}', '${safeLecturer}')" class="no-print ml-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition flex items-center gap-1 min-h-[44px]">
+                    ✏️ Edit / Remove Course
+                  </button>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">
+                  Assigned Lecturer(s): <b class="text-slate-200">${course.lecturer_name}</b> • Total Lectures Held: <b class="text-white font-mono">${course.total_sessions_held}</b>
+                </p>
+                <div class="flex items-center gap-1.5 flex-wrap mt-2">
+                  <span class="text-[11px] font-mono text-slate-400">Co-Lecturer Class Attribution:</span>
+                  ${breakdownPills}
+                </div>
+              </div>
+              <div class="flex items-center gap-3 text-xs font-mono">
+                <span class="px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+                  Cleared (≥70%): <b>${course.eligible_count}</b>
+                </span>
+                <span class="px-3 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300">
+                  Barred (<70%): <b>${course.barred_count}</b>
+                </span>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400 bg-slate-950/50">
+                    <th class="py-2.5 px-4">#</th>
+                    <th class="py-2.5 px-4">Matric No</th>
+                    <th class="py-2.5 px-4">Student Name</th>
+                    <th class="py-2.5 px-4">Institutional Email</th>
+                    <th class="py-2.5 px-4">Biometric ID</th>
+                    <th class="py-2.5 px-4">Classes</th>
+                    <th class="py-2.5 px-4">Attendance %</th>
+                    <th class="py-2.5 px-4">HOD Exam Verdict</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml || '<tr><td colspan="8" class="py-6 text-center text-xs text-slate-500">No students match this filter.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function exportHodCsv() {
+      if (!state.hodReport) return;
+      let rows = [['Department', 'Course Code', 'Level', 'Semester', 'Assigned Lecturers', 'Matric No', 'Student Name', 'Institutional Email', 'Attended', 'Total Classes', 'Attendance %', 'Exam Verdict']];
+      state.hodReport.courses.forEach(c => {
+        c.students.forEach(s => {
+          rows.push([
+            state.hodReport.department.name,
+            c.course_code,
+            `${c.level}L`,
+            c.semester === 2 ? 'Second Semester' : 'First Semester',
+            c.lecturer_name,
+            s.matric_no,
+            s.full_name,
+            s.email || '',
+            s.attended_classes,
+            s.total_classes,
+            `${s.attendance_pct}%`,
+            s.exam_eligible ? 'CLEARED (>=70%)' : 'BARRED (<70%)'
+          ]);
+        });
+      });
+      const csvContent = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HOD_70Pct_Exam_Eligibility_${state.hodReport.department.code}.csv`;
+      a.click();
+      showToast('Downloaded official HOD 70% Exam Eligibility CSV!');
+    }
+
+    // =========================================================================
+    // ISOLATED COURSE LECTURER WORKSPACE & CO-LECTURER SESSIONS MANAGEMENT
+    // =========================================================================
+    async function renderIsolatedLecturerWorkspace() {
+      const lectSess = getActiveRoleSession('lecturer');
+      if (!lectSess || !lectSess.course_id) return;
+
+      const courseObj = state.allDeptCourses.find(c => c.id === lectSess.course_id) || lectSess;
+      const semLabel = (courseObj.semester || 1) === 2 ? '2nd Semester' : '1st Semester';
+      const assignedList = courseObj.assigned_lecturers || parseLecturersClient(courseObj.lecturer_name || lectSess.lecturer_name);
+
+      document.getElementById('lecturerCourseLevelSemPill').textContent = `${courseObj.level}L • ${semLabel}`;
+      document.getElementById('lecturerSemBadge').textContent = semLabel;
+      document.getElementById('lecturerIsolatedHeading').textContent = `${courseObj.course_code} — ${courseObj.course_title}`;
+      document.getElementById('lecturerAssignedNames').textContent = assignedList.join(' & ');
+      document.getElementById('lecturerActiveDutyName').textContent = lectSess.lecturer_name;
+      document.getElementById('lecturerSessionsLogHeading').textContent = `${courseObj.course_code} Lecture Sessions & Co-Lecturer Attribution Log`;
+
+      // Lock the course select strictly to this lecturer's authenticated course
+      const lectCourseSel = document.getElementById('lecturerCourseSelect');
+      lectCourseSel.innerHTML = `<option value="${courseObj.id}" selected>🔒 ${courseObj.course_code} (${courseObj.level}L • ${semLabel}) — ${courseObj.course_title}</option>`;
+
+      // Populate the co-lecturer on duty dropdown for starting today's class
+      const starterSel = document.getElementById('sessionStarterInput');
+      starterSel.innerHTML = assignedList.map(l =>
+        `<option value="${l.replace(/"/g, '&quot;')}" ${l === lectSess.lecturer_name ? 'selected' : ''}>👨‍🏫 ${l}</option>`
+      ).join('');
+
+      // Fetch isolated course attendance & co-lecturer breakdown report for this course ONLY
+      try {
+        const res = await fetch(`/api/hod/eligibility?department_id=${state.selectedDeptId}&course_id=${lectSess.course_id}`);
+        const rep = await res.json();
+        const cRep = rep.courses && rep.courses[0] ? rep.courses[0] : null;
+        state.lecturerCourseReport = cRep;
+
+        const breakdownEl = document.getElementById('lecturerCoTeachBreakdown');
+        if (cRep && cRep.lecturer_breakdown) {
+          breakdownEl.innerHTML = `<span class="text-xs font-mono text-slate-400">Classes Taught Breakdown:</span>` +
+            cRep.lecturer_breakdown.map(lb => {
+              const wkText = lb.weeks && lb.weeks.length ? ` (Weeks: ${lb.weeks.join(', ')})` : '';
+              return `<span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-teal-500/30 text-xs font-mono text-teal-300">👨‍🏫 <b>${lb.lecturer_name}</b>: ${lb.sessions_taught} lecture${lb.sessions_taught === 1 ? '' : 's'}${wkText}</span>`;
+            }).join('');
+        }
+
+        const tableBox = document.getElementById('lecturerCourseAttendanceContainer');
+        if (cRep) {
+          const rowsHtml = cRep.students.map((st, idx) => {
+            const badgeClass = st.exam_eligible
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+              : 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold';
+            const barColor = st.attendance_pct >= 75 ? 'bg-emerald-500' : (st.attendance_pct >= 70 ? 'bg-amber-400' : 'bg-rose-500');
+            return `
+              <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition">
+                <td class="py-2.5 px-4 font-mono text-xs text-slate-400">${idx + 1}</td>
+                <td class="py-2.5 px-4 font-mono text-xs font-semibold text-white">${st.matric_no}</td>
+                <td class="py-2.5 px-4 text-sm text-slate-200">${st.full_name}</td>
+                <td class="py-2.5 px-4 font-mono text-xs text-slate-400">${st.email || '—'}</td>
+                <td class="py-2.5 px-4 font-mono text-xs text-slate-300">${st.attended_classes} / ${st.total_classes}</td>
+                <td class="py-2.5 px-4 w-44">
+                  <div class="flex items-center gap-2">
+                    <div class="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                      <div class="h-full ${barColor}" style="width: ${Math.min(100, st.attendance_pct)}%"></div>
+                    </div>
+                    <span class="font-mono text-xs font-bold ${st.exam_eligible ? 'text-emerald-400' : 'text-rose-400'}">${st.attendance_pct}%</span>
+                  </div>
+                </td>
+                <td class="py-2.5 px-4">
+                  <span class="px-2.5 py-1 rounded-full text-[11px] font-mono border ${badgeClass}">${st.status_badge}</span>
+                </td>
+              </tr>
+            `;
+          }).join('');
+
+          tableBox.innerHTML = `
+            <div class="glass rounded-2xl border border-slate-800 overflow-hidden">
+              <div class="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 class="font-display font-bold text-base sm:text-lg text-white">
+                    📋 ${cRep.course_code} Student Attendance &amp; 70% Exam Standing (Isolated Course View)
+                  </h3>
+                  <p class="text-xs text-slate-400">
+                    Showing enrolled ${cRep.level}L students for <b>${cRep.course_code}</b> only • Total Classes Held: <b>${cRep.total_sessions_held}</b>
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-mono">
+                  <span class="px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">Cleared (≥70%): <b>${cRep.eligible_count}</b></span>
+                  <span class="px-3 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300">Barred (<70%): <b>${cRep.barred_count}</b></span>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                  <thead>
+                    <tr class="border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400 bg-slate-950/50">
+                      <th class="py-2.5 px-4">#</th>
+                      <th class="py-2.5 px-4">Matric No</th>
+                      <th class="py-2.5 px-4">Student Name</th>
+                      <th class="py-2.5 px-4">Institutional Email</th>
+                      <th class="py-2.5 px-4">Classes Attended</th>
+                      <th class="py-2.5 px-4">Attendance %</th>
+                      <th class="py-2.5 px-4">70% Standing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rowsHtml || '<tr><td colspan="7" class="py-6 text-center text-xs text-slate-500">No students enrolled for this course level yet.</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }
+      } catch (e) {
+        console.warn('Error loading isolated course report:', e);
+      }
+    }
+
+    function onDutyLecturerSwitch(newLecturerName) {
+      const lectSess = getActiveRoleSession('lecturer');
+      if (!lectSess || !newLecturerName) return;
+      lectSess.lecturer_name = newLecturerName;
+      lectSess.actor_name = `${newLecturerName} (${lectSess.course_code})`;
+      state.roleSessions['lecturer'] = lectSess;
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+      document.getElementById('lecturerActiveDutyName').textContent = newLecturerName;
+      document.getElementById('activeAuthLabel').innerHTML = `🔓 Signed in: <b class="text-emerald-400">${lectSess.actor_name}</b>`;
+      showToast(`Active Lecturer on Duty switched to ${newLecturerName} for ${lectSess.course_code}`);
+    }
+
+    function openEditLecturerPinModal() {
+      const lectSess = getActiveRoleSession('lecturer');
+      if (!lectSess) return;
+      const courseObj = state.allDeptCourses.find(c => c.id === lectSess.course_id) || lectSess;
+      document.getElementById('editLecturerPinModalTitle').textContent = `Customize PIN & Co-Lecturers (${courseObj.course_code})`;
+      document.getElementById('editLecturerCourseNamesInput').value = courseObj.lecturer_name || (courseObj.assigned_lecturers || []).join(' & ');
+      document.getElementById('editLecturerCoursePinInput').value = '';
+      openModal('editLecturerPinModal');
+    }
+
+    async function submitLecturerCoursePinUpdate() {
+      const lectSess = getActiveRoleSession('lecturer');
+      if (!lectSess) return;
+      const lecturer_name = document.getElementById('editLecturerCourseNamesInput').value.trim();
+      const new_pin = document.getElementById('editLecturerCoursePinInput').value.trim();
+      if (!new_pin || new_pin.length < 4) {
+        return showToast('Please enter a new 4+ character private PIN for your course.', 'error');
+      }
+      const res = await fetch(`/api/courses/${lectSess.course_id}/lecturer-pin`, {
+        method: 'PUT',
+        headers: authHeaders('lecturer'),
+        body: JSON.stringify({ new_pin, lecturer_name })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Failed to update course PIN', 'error');
+
+      lectSess.assigned_lecturers = data.assigned_lecturers;
+      if (data.assigned_lecturers && !data.assigned_lecturers.includes(lectSess.lecturer_name)) {
+        lectSess.lecturer_name = data.assigned_lecturers[0];
+        lectSess.actor_name = `${lectSess.lecturer_name} (${lectSess.course_code})`;
+      }
+      state.roleSessions['lecturer'] = lectSess;
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+      closeModal('editLecturerPinModal');
+      showToast(data.message, 'success');
+      await refreshAllData();
+    }
+
+    function exportLecturerCourseCsv() {
+      const c = state.lecturerCourseReport;
+      if (!c) return showToast('Course report not loaded yet', 'error');
+      let rows = [['Course Code', 'Course Title', 'Level', 'Semester', 'Assigned Lecturers', 'Matric No', 'Student Name', 'Institutional Email', 'Attended', 'Total Classes', 'Attendance %', 'Exam Verdict']];
+      c.students.forEach(s => {
+        rows.push([
+          c.course_code,
+          c.course_title,
+          `${c.level}L`,
+          c.semester === 2 ? 'Second Semester' : 'First Semester',
+          c.lecturer_name,
+          s.matric_no,
+          s.full_name,
+          s.email || '',
+          s.attended_classes,
+          s.total_classes,
+          `${s.attendance_pct}%`,
+          s.exam_eligible ? 'CLEARED (>=70%)' : 'BARRED (<70%)'
+        ]);
+      });
+      const csvContent = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${c.course_code.replace(/\s+/g, '_')}_Attendance_70Pct.csv`;
+      a.click();
+      showToast(`Exported ${c.course_code} attendance sheet!`);
+    }
+
+    function getLiveGpsCoordinates(timeoutMs = 7000) {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          return resolve(null);
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy
+          }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 10000 }
+        );
+      });
+    }
+
+    function formatCountdownMMSS(totalSeconds) {
+      const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+      const mm = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      return `${mm}:${ss}`;
+    }
+
+    async function createNewLectureSession() {
+      const lectSess = getActiveRoleSession('lecturer');
+      const courseId = lectSess ? lectSess.course_id : parseInt(document.getElementById('lecturerCourseSelect').value, 10);
+      const week = parseInt(document.getElementById('sessionWeekInput').value, 10) || 1;
+      const startedBy = document.getElementById('sessionStarterInput').value.trim() || (lectSess ? lectSess.lecturer_name : 'Course Lecturer');
+      const topic = document.getElementById('sessionTopicInput').value.trim() || `Week ${week} Departmental Core Lecture`;
+      const radiusEl = document.getElementById('sessionGeofenceRadius');
+      const geofence_radius_m = radiusEl ? parseFloat(radiusEl.value) || 150.0 : 150.0;
+
+      if (!courseId) return showToast('Please unlock your assigned course first', 'error');
+
+      const btn = document.getElementById('launchSessionBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '📍 Capturing Classroom GPS & Generating PIN #1/5...';
+      }
+
+      try {
+        const gps = await getLiveGpsCoordinates(5500);
+        const res = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: authHeaders('lecturer'),
+          body: JSON.stringify({
+            course_id: courseId,
+            week_number: week,
+            started_by: startedBy,
+            topic,
+            latitude: gps ? gps.latitude : null,
+            longitude: gps ? gps.longitude : null,
+            geofence_radius_m
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) return showToast(data.detail || 'Error creating session', 'error');
+
+        showToast(data.message, 'success');
+        document.getElementById('sessionTopicInput').value = '';
+        await refreshAllData();
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '🚀 Launch Session &amp; Generate 4-Digit PIN (#1/5)';
+        }
+      }
+    }
+
+    async function regenerateClassroomPin(sessionUid) {
+      const res = await fetch(`/api/sessions/${sessionUid}/regenerate-pin`, {
+        method: 'POST',
+        headers: authHeaders('lecturer')
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Cannot generate another PIN', 'error');
+      showToast(data.message, 'success');
+      await refreshAllData();
+    }
+
+    async function loadSessionsList() {
+      await refreshAllData();
+    }
+
+    function renderSessionsList() {
+      const box = document.getElementById('sessionsListContainer');
+      const lectSess = getActiveRoleSession('lecturer');
+      // Strict per-course isolation: only show sessions for the authenticated lecturer's course
+      const courseSessions = lectSess && lectSess.course_id
+        ? state.sessions.filter(s => s.course_id === lectSess.course_id)
+        : state.sessions;
+
+      if (!courseSessions.length) {
+        const cName = lectSess ? lectSess.course_code : 'this course';
+        box.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No lecture sessions recorded for <b>${cName}</b> yet. Select the Lecturer Taking Class Today on the left and click <b>"Launch Session &amp; Generate 4-Digit PIN (#1/5)"</b>.</div>`;
+        return;
+      }
+      box.innerHTML = courseSessions.map(s => {
+        const genCount = s.pin_generation_count || 1;
+        const maxGen = s.max_pin_generations || 5;
+        const genLeft = s.generations_remaining !== undefined ? s.generations_remaining : Math.max(0, maxGen - genCount);
+        const pinSec = s.pin_remaining_seconds || 0;
+        const totalSec = s.total_remaining_seconds || 0;
+        const isPinExpired = s.status === 'ACTIVE' && (s.pin_is_expired || pinSec <= 0);
+        const geoBadge = s.has_geofence
+          ? `<span class="px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30 text-[10px] font-mono">📍 GPS Geofence ≤${Math.round(s.geofence_radius_m || 150)}m</span>`
+          : `<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">📍 PIN Mode (GPS unavailable)</span>`;
+
+        const activePinPanel = (s.status === 'ACTIVE' && s.classroom_pin) ? `
+          <div class="mt-3 p-3.5 rounded-xl ${isPinExpired ? 'bg-amber-950/35 border border-amber-500/50' : 'bg-emerald-950/30 border border-emerald-500/50'} flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-mono uppercase tracking-wider ${isPinExpired ? 'text-amber-300' : 'text-emerald-300'} font-bold">
+                  🔑 Layer 1 Classroom PIN (Generation #${genCount} of ${maxGen})
+                </span>
+                <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[11px] font-mono ${isPinExpired ? 'text-rose-400 font-bold' : 'text-amber-300'}">
+                  ${isPinExpired ? '⏰ THIS 2-MIN PIN EXPIRED' : `⏱ PIN Expires: ${formatCountdownMMSS(pinSec)}`}
+                </span>
+                <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[11px] font-mono text-teal-300">
+                  ⏳ Total 10-Min Window Left: ${formatCountdownMMSS(totalSec)}
+                </span>
+              </div>
+              <div class="flex items-center gap-3 pt-0.5">
+                <span class="font-mono text-2xl sm:text-3xl font-extrabold tracking-[0.28em] px-3.5 py-1 rounded-xl bg-slate-950 border ${isPinExpired ? 'border-rose-500/50 text-rose-400 line-through' : 'border-emerald-400 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.2)]'}">
+                  ${s.classroom_pin}
+                </span>
+                <div class="text-[11px] text-slate-300">
+                  <div>Call out this 4-digit PIN inside the lecture hall.</div>
+                  <div class="text-slate-400">Generations remaining: <b class="text-white font-mono">${genLeft} / ${maxGen}</b> (2 mins each • 10 mins total)</div>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              ${genCount < maxGen ? `
+                <button onclick="regenerateClassroomPin('${s.session_uid}')" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-md min-h-[44px]">
+                  🔄 Generate Next 4-Digit PIN (#${genCount + 1}/${maxGen})
+                </button>
+              ` : `
+                <span class="px-3 py-1.5 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-300 font-mono text-xs font-semibold">
+                  Max 5/5 PINs Used
+                </span>
+              `}
+              <button onclick="closeLectureSession('${s.session_uid}')" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition min-h-[44px]">
+                🔒 Permanently Lock Session
+              </button>
+            </div>
+          </div>
+        ` : '';
+
+        return `
+          <div class="p-4 rounded-xl bg-slate-950/80 border ${s.status === 'ACTIVE' ? 'border-emerald-500/40' : 'border-slate-800'} space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold ${s.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-400'}">
+                    ${s.status === 'ACTIVE' ? '🟢 ACTIVE IN CLASS' : '🔒 PERMANENTLY LOCKED'}
+                  </span>
+                  <span class="font-mono text-xs font-bold text-white">${s.course_code} (${s.level}L • ${s.semester === 2 ? '2nd Sem' : '1st Sem'}) • Week ${s.week_number}</span>
+                  <span class="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40 text-[11px] font-mono font-semibold">
+                    👨‍🏫 Taught &amp; Taken by: ${s.started_by}
+                  </span>
+                  ${geoBadge}
+                  <span class="font-mono text-[11px] text-slate-500">${s.session_uid}</span>
+                </div>
+                <p class="text-sm font-medium text-slate-200 mt-1">${s.topic}</p>
+                <p class="text-xs text-slate-400 mt-0.5">
+                  Verified In-Class Biometric Attendance: <b class="text-emerald-400 font-mono">${s.present_count} / ${s.total_class_size}</b> students
+                  • PIN Generations Used: <b class="text-white font-mono">${genCount} / ${maxGen}</b>
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                ${s.status === 'ACTIVE' ? `
+                  <button onclick="openSessionInKiosk('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition min-h-[44px]">
+                    📱 Student Self-Sign
+                  </button>
+                ` : `
+                  <span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-500" title="Layer 3 Anti-Backdoor Guard: Locked sessions can never be reopened">
+                    🛡️ Sealed (Cannot Reopen)
+                  </span>
+                `}
+              </div>
+            </div>
+            ${activePinPanel}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openSessionInKiosk(sessionUid) {
+      switchRoleTab('student');
+      const sel = document.getElementById('studentSelfSessionSelect');
+      if (sel) sel.value = sessionUid;
+    }
+
+    async function closeLectureSession(sessionUid) {
+      if (!confirm('Layer 3 Permanent Classroom Lock:\n\nOnce you lock this session inside the classroom, it is permanently sealed and can NEVER be reopened after class.\n\nProceed to lock session now?')) {
+        return;
+      }
+      const res = await fetch(`/api/sessions/${sessionUid}/close`, {
+        method: 'POST',
+        headers: authHeaders('lecturer')
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error closing session', 'error');
+      showToast(data.message || 'Session permanently locked');
+      await refreshAllData();
+    }
+
+    // =========================================================================
+    // ISOLATED LEVEL COURSE REP WORKSPACE, BIOMETRIC KIOSK & OFFLINE SYNC
+    // =========================================================================
+    function renderIsolatedCourseRepWorkspace() {
+      const repSess = getActiveRoleSession('courserep');
+      if (!repSess || !repSess.level) return;
+
+      const lvl = Number(repSess.level);
+      const currDept = state.departments.find(d => d.id === state.selectedDeptId);
+      const deptText = currDept ? `${currDept.name} (${currDept.code})` : 'Engineering';
+      const repObj = state.courseReps.find(r => Number(r.level) === lvl) || {
+        full_name: repSess.rep_name || `${lvl}L Course Rep`,
+        matric_no: repSess.rep_matric || ''
+      };
+
+      document.getElementById('courseRepIsolatedBadge').textContent = `🔒 Isolated ${lvl} Level Course Rep Dashboard`;
+      document.getElementById('courseRepDeptPill').textContent = `${deptText} • ${lvl}L Registry`;
+      document.getElementById('courseRepHeading').textContent = `${lvl} Level Biometric Kiosk & Classmate Enrollment`;
+      document.getElementById('courseRepActiveName').textContent = `${repObj.full_name} (${repObj.matric_no || lvl + 'L'})`;
+      document.getElementById('courseRepLockedLevelLabel').textContent = `${lvl} Level`;
+      document.getElementById('kioskLevelTitle').textContent = `1. Classroom Biometric Attendance Kiosk (${lvl}L Only)`;
+      document.getElementById('enrollCardTitle').textContent = `2. Enroll ${lvl} Level Classmate Biometrics`;
+
+      const enrollLvlSel = document.getElementById('enrollLevel');
+      enrollLvlSel.innerHTML = `<option value="${lvl}" selected>🔒 ${lvl} Level</option>`;
+      document.getElementById('enrollRepName').value = `${repObj.full_name} (${lvl}L Course Rep)`;
+
+      // Render the isolated level classmates table at the bottom of the Course Rep portal
+      const levelStudents = state.allDeptStudents.filter(st => Number(st.level) === lvl);
+      const box = document.getElementById('courseRepLevelStudentsContainer');
+      const rowsHtml = levelStudents.map((st, idx) => {
+        const thumbHtml = st.face_photo_b64
+          ? `<img src="${st.face_photo_b64}" class="w-8 h-8 rounded-lg object-cover border border-emerald-500/50 inline-block mr-2" alt="Face" />`
+          : `<span class="inline-flex w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 items-center justify-center text-xs mr-2">👤</span>`;
+        const bioBadge = st.is_neural_128d
+          ? `<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono text-[11px]">✓ 128D ResNet-34 Face Bound</span>`
+          : `<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono text-[11px]">⚠ Legacy Template (Re-capture 128D)</span>`;
+        return `
+          <tr class="border-b border-slate-800/60 hover:bg-slate-900/50 transition">
+            <td class="py-2.5 px-4 font-mono text-xs text-slate-400">${idx + 1}</td>
+            <td class="py-2.5 px-4 font-mono text-xs font-semibold text-white">${st.matric_no}</td>
+            <td class="py-2.5 px-4 text-sm text-slate-200 flex items-center">${thumbHtml}<span>${st.full_name}</span></td>
+            <td class="py-2.5 px-4 font-mono text-xs text-slate-400">${st.email || '—'}</td>
+            <td class="py-2.5 px-4 text-xs">${bioBadge}</td>
+            <td class="py-2.5 px-4 text-xs text-slate-400">${st.enrolled_by_rep || `${lvl}L Course Rep`}</td>
+          </tr>
+        `;
+      }).join('');
+
+      box.innerHTML = `
+        <div class="glass rounded-2xl border border-slate-800 overflow-hidden">
+          <div class="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="font-display font-bold text-base sm:text-lg text-white">
+                🎓 ${lvl} Level Enrolled Classmates Registry (${deptText})
+              </h3>
+              <p class="text-xs text-slate-400">
+                Isolated to <b>${lvl} Level</b> only • Total Enrolled Classmates: <b class="text-emerald-400 font-mono">${levelStudents.length}</b>
+              </p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400 bg-slate-950/50">
+                  <th class="py-2.5 px-4">#</th>
+                  <th class="py-2.5 px-4">Matric No</th>
+                  <th class="py-2.5 px-4">Enrolled Face &amp; Full Name</th>
+                  <th class="py-2.5 px-4">Institutional Email</th>
+                  <th class="py-2.5 px-4">128D Biometric Status</th>
+                  <th class="py-2.5 px-4">Enrolled By</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml || `<tr><td colspan="6" class="py-6 text-center text-xs text-slate-500">No ${lvl} Level students enrolled yet. Use the form above to capture your ${lvl}L classmates' faces.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function openEditCourseRepModal() {
+      const repSess = getActiveRoleSession('courserep');
+      if (!repSess) return;
+      const lvl = Number(repSess.level);
+      const repObj = state.courseReps.find(r => Number(r.level) === lvl) || {
+        full_name: repSess.rep_name || `${lvl}L Course Rep`,
+        matric_no: repSess.rep_matric || ''
+      };
+      document.getElementById('editCourseRepModalTitle').textContent = `Customize ${lvl} Level Course Rep Profile & PIN`;
+      document.getElementById('editCourseRepNameInput').value = repObj.full_name || '';
+      document.getElementById('editCourseRepMatricInput').value = repObj.matric_no || '';
+      document.getElementById('editCourseRepPinInput').value = '';
+      openModal('editCourseRepModal');
+    }
+
+    async function submitEditCourseRepProfile() {
+      const repSess = getActiveRoleSession('courserep');
+      if (!repSess) return;
+      const lvl = Number(repSess.level);
+      const full_name = document.getElementById('editCourseRepNameInput').value.trim();
+      const matric_no = document.getElementById('editCourseRepMatricInput').value.trim().toUpperCase();
+      const new_pin = document.getElementById('editCourseRepPinInput').value.trim();
+      if (!full_name) return showToast('Please enter the Level Course Rep Full Name', 'error');
+
+      const res = await fetch(`/api/course-reps/${state.selectedDeptId}/${lvl}`, {
+        method: 'PUT',
+        headers: authHeaders('courserep'),
+        body: JSON.stringify({ full_name, matric_no: matric_no || null, new_pin: new_pin || null })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Failed to update Course Rep profile', 'error');
+
+      repSess.rep_name = data.course_rep.full_name;
+      repSess.rep_matric = data.course_rep.matric_no;
+      repSess.actor_name = `${data.course_rep.full_name} (${lvl}L)`;
+      state.roleSessions['courserep'] = repSess;
+      sessionStorage.setItem('eng_role_sessions_v1', JSON.stringify(state.roleSessions));
+
+      closeModal('editCourseRepModal');
+      showToast(data.message, 'success');
+      renderSecurityState();
+      await refreshAllData();
+    }
+
+    // =========================================================================
+    // 128D NEURAL FACIAL BIOMETRIC ENGINE (@vladmandic/face-api dlib ResNet-34)
+    // =========================================================================
+    const FACE_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+    let faceModelsLoaded = false;
+    let faceModelsLoadingPromise = null;
+    state.pendingEnrollDescriptor = null;
+    state.pendingEnrollPhotoB64 = null;
+
+    async function ensureFaceModelsLoaded() {
+      if (faceModelsLoaded) return true;
+      if (faceModelsLoadingPromise) return faceModelsLoadingPromise;
+      const badge = document.getElementById('neuralModelStatusBadge');
+      if (badge) badge.textContent = 'Loading 128D Neural Weights...';
+
+      faceModelsLoadingPromise = (async () => {
+        try {
+          if (typeof faceapi === 'undefined') {
+            await new Promise((resolve, reject) => {
+              const s = document.createElement('script');
+              s.src = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';
+              s.onload = resolve;
+              s.onerror = () => reject(new Error('Failed to load 128D face-api neural library from CDN. Check internet connection.'));
+              document.head.appendChild(s);
+            });
+          }
+          await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+            faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODEL_URL),
+            faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL)
+          ]);
+          faceModelsLoaded = true;
+          if (badge) badge.textContent = '✓ 128D ResNet-34 Active';
+          return true;
+        } catch (err) {
+          console.warn('Neural model load error:', err);
+          faceModelsLoadingPromise = null;
+          if (badge) badge.textContent = '⚠ Neural Engine Offline';
+          return false;
+        }
+      })();
+      return faceModelsLoadingPromise;
+    }
+
+    function computeClientEuclideanDistance(vecA, vecB) {
+      if (!vecA || !vecB || vecA.length !== vecB.length) return 999.0;
+      let sum = 0;
+      for (let i = 0; i < vecA.length; i++) {
+        const d = vecA[i] - vecB[i];
+        sum += d * d;
+      }
+      return Math.sqrt(sum);
+    }
+
+    function computeClientCosineSimilarity(vecA, vecB) {
+      if (!vecA || !vecB || vecA.length !== vecB.length) return 0.0;
+      let dot = 0, normA = 0, normB = 0;
+      for (let i = 0; i < vecA.length; i++) {
+        dot += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+      }
+      if (normA === 0 || normB === 0) return 0.0;
+      return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    function stopAllCameraStreams() {
+      ['enrollVideo', 'kioskVideo', 'studentVideo'].forEach(vid => {
+        const v = document.getElementById(vid);
+        if (v && v.srcObject) {
+          v.srcObject.getTracks().forEach(t => t.stop());
+          v.srcObject = null;
+        }
+      });
+    }
+
+    async function openCameraStream(videoId, placeholderId, fallbackImgId, successMsg) {
+      const video = document.getElementById(videoId);
+      const placeholder = document.getElementById(placeholderId);
+      const fallbackImg = document.getElementById(fallbackImgId);
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Browser blocked navigator.mediaDevices (use HTTPS in Chrome/Edge/Safari or click "Take / Upload Camera Photo").', 'error');
+        return;
+      }
+
+      try {
+        ensureFaceModelsLoaded();
+        stopAllCameraStreams();
+
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
+          });
+        } catch (constraintErr) {
+          if (constraintErr.name === 'OverconstrainedError' || constraintErr.name === 'NotFoundError' || constraintErr.name === 'AbortError') {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          } else {
+            throw constraintErr;
+          }
+        }
+
+        if (fallbackImg) fallbackImg.classList.add('hidden');
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        await video.play().catch(() => {});
+        showToast(successMsg, 'success');
+      } catch (err) {
+        const errName = err && err.name ? err.name : 'Error';
+        const errMsg = err && err.message ? err.message : 'Camera blocked';
+        if (errName === 'NotAllowedError' || errName === 'SecurityError') {
+          showToast(`Browser/WebView blocked live camera (${errName}: ${errMsg}). Allow Camera in browser site settings, open in Chrome/Edge, or click "📸 Or Take / Upload Camera Photo".`, 'error');
+        } else if (errName === 'NotReadableError') {
+          showToast(`Camera is currently in use by another app or tab (${errName}). Close other camera apps or use "📸 Or Take / Upload Camera Photo".`, 'error');
+        } else {
+          showToast(`Camera error (${errName}: ${errMsg}). Try "📸 Or Take / Upload Camera Photo" below.`, 'error');
+        }
+      }
+    }
+
+    function handleCameraPhotoFallback(event, target) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      ensureFaceModelsLoaded();
+      const reader = new FileReader();
+      reader.onload = e => {
+        const imgId = target === 'enroll' ? 'enrollFallbackImg' : (target === 'kiosk' ? 'kioskFallbackImg' : 'studentFallbackImg');
+        const videoId = target === 'enroll' ? 'enrollVideo' : (target === 'kiosk' ? 'kioskVideo' : 'studentVideo');
+        const phId = target === 'enroll' ? 'enrollCameraPlaceholder' : (target === 'kiosk' ? 'kioskCameraPlaceholder' : 'studentCameraPlaceholder');
+
+        const img = document.getElementById(imgId);
+        const video = document.getElementById(videoId);
+        const ph = document.getElementById(phId);
+        stopAllCameraStreams();
+        if (video) video.classList.add('hidden');
+        if (ph) ph.classList.add('hidden');
+        img.onload = () => {
+          showToast('Camera photo loaded! Click the Capture / Scan Face button to extract 128D biometrics.', 'success');
+        };
+        img.src = e.target.result;
+        img.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function extractLiveFace128DFromVideo(videoId, canvasId, fallbackImgId) {
+      const video = document.getElementById(videoId);
+      const fallbackImg = fallbackImgId ? document.getElementById(fallbackImgId) : null;
+
+      let sourceEl = null;
+      let srcWidth = 0;
+      let srcHeight = 0;
+      let isLiveVideo = false;
+
+      if (video && video.srcObject && !video.classList.contains('hidden') && video.readyState >= 2) {
+        sourceEl = video;
+        srcWidth = video.videoWidth || 640;
+        srcHeight = video.videoHeight || 480;
+        isLiveVideo = true;
+      } else if (fallbackImg && !fallbackImg.classList.contains('hidden') && fallbackImg.complete && fallbackImg.naturalWidth > 0) {
+        sourceEl = fallbackImg;
+        srcWidth = fallbackImg.naturalWidth;
+        srcHeight = fallbackImg.naturalHeight;
+      } else {
+        throw new Error('Live Camera is not active! Click "📷 Open Camera" first so the system can scan your live face.');
+      }
+
+      const modelsReady = await ensureFaceModelsLoaded();
+      if (!modelsReady || typeof faceapi === 'undefined') {
+        throw new Error('128D Neural Face Recognition Engine is still initializing. Please wait 2 seconds and try again.');
+      }
+
+      const detectorOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.48 });
+
+      // Frame 1 Detection
+      const det1 = await faceapi
+        .detectSingleFace(sourceEl, detectorOpts)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!det1) {
+        throw new Error('No clear human face detected inside the oval guide! Center your face in good lighting and look directly at the camera.');
+      }
+
+      let finalDescriptor = Array.from(det1.descriptor);
+
+      // If running on a live camera stream, capture a 2nd frame 180ms later for multi-frame burst averaging & liveness consistency
+      if (isLiveVideo) {
+        await new Promise(r => setTimeout(r, 180));
+        const det2 = await faceapi
+          .detectSingleFace(sourceEl, detectorOpts)
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (!det2) {
+          throw new Error('Liveness Interrupted: Keep your face steady inside the oval ring during the 2-frame biometric scan.');
+        }
+
+        const desc2 = Array.from(det2.descriptor);
+        const burstDrift = computeClientEuclideanDistance(finalDescriptor, desc2);
+        if (burstDrift > 0.36) {
+          throw new Error('Excessive motion detected during scan! Hold your phone steady and keep your face centered in the oval.');
+        }
+
+        // Average the two 128D ResNet-34 embeddings for higher precision
+        finalDescriptor = finalDescriptor.map((v, i) => (v + desc2[i]) / 2.0);
+      }
+
+      const box = det1.detection.box;
+      const thumbCanvas = document.createElement('canvas');
+      thumbCanvas.width = 96;
+      thumbCanvas.height = 96;
+      const tCtx = thumbCanvas.getContext('2d');
+      const pad = Math.max(box.width, box.height) * 0.2;
+      const sx = Math.max(0, box.x - pad);
+      const sy = Math.max(0, box.y - pad);
+      const sw = Math.min(srcWidth - sx, box.width + pad * 2);
+      const sh = Math.min(srcHeight - sy, box.height + pad * 2);
+      tCtx.drawImage(sourceEl, sx, sy, sw, sh, 0, 0, 96, 96);
+      const photoB64 = thumbCanvas.toDataURL('image/jpeg', 0.78);
+
+      const descriptor128 = finalDescriptor.map(v => Number(v.toFixed(6)));
+      return { descriptor: descriptor128, photoB64 };
+    }
+
+    async function startEnrollCamera() {
+      await openCameraStream(
+        'enrollVideo',
+        'enrollCameraPlaceholder',
+        'enrollFallbackImg',
+        'Master KYC Enrollment Camera Active! Center classmate face in the oval and click "2. Capture Master KYC Face".'
+      );
+    }
+
+    async function captureEnrollmentFaceSnapshot() {
+      const btn = document.getElementById('captureEnrollFaceBtn');
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Scanning 2-Frame 128D KYC...';
+        }
+        const { descriptor, photoB64 } = await extractLiveFace128DFromVideo('enrollVideo', 'enrollCanvas', 'enrollFallbackImg');
+        state.pendingEnrollDescriptor = descriptor;
+        state.pendingEnrollPhotoB64 = photoB64;
+
+        document.getElementById('enrollFacePreviewImg').src = photoB64;
+        document.getElementById('enrollFaceStatusBadge').textContent = `✓ 128D Master KYC Captured`;
+        document.getElementById('enrollCaptureOverlay').classList.remove('hidden');
+        showToast('128D Master KYC Face Signature captured! Now click "3. Lock Master KYC Face & Enroll".', 'success');
+      } catch (err) {
+        showToast(err.message || 'Face capture failed', 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '📸 2. Capture Master KYC Face';
+        }
+      }
+    }
+
+    async function startKioskCamera() {
+      await openCameraStream(
+        'kioskVideo',
+        'kioskCameraPlaceholder',
+        'kioskFallbackImg',
+        'Classroom Kiosk Camera Active!'
+      );
+    }
+
+    async function startStudentCamera() {
+      await openCameraStream(
+        'studentVideo',
+        'studentCameraPlaceholder',
+        'studentFallbackImg',
+        'Phone Camera Active! Center your face in the oval ring and click "2. Verify My Face & Sign In".'
+      );
+    }
+
+    function cacheDepartmentTemplatesOffline() {
+      localStorage.setItem('eng_cached_biometric_templates', JSON.stringify(state.cachedTemplates));
+      const count = Object.keys(state.cachedTemplates).length;
+      showToast(`Cached ${count} encrypted 128D student biometric vectors to device storage!`);
+    }
+
+    async function verifyStudentOnKiosk(method = 'FACE_BIOMETRIC_KIOSK') {
+      const sessionUid = document.getElementById('kioskSessionSelect').value;
+      const matricNo = document.getElementById('kioskStudentSelect').value;
+      if (!sessionUid || !matricNo) {
+        return showToast('Please select both an active lecture session and a student.', 'error');
+      }
+
+      let liveCapture;
+      try {
+        liveCapture = await extractLiveFace128DFromVideo('kioskVideo', 'kioskCanvas', 'kioskFallbackImg');
+      } catch (camErr) {
+        return showToast(camErr.message, 'error');
+      }
+
+      const payload = {
+        session_uid: sessionUid,
+        matric_no: matricNo,
+        verification_method: method,
+        face_descriptor: liveCapture.descriptor,
+        face_photo_b64: liveCapture.photoB64,
+        captured_offline: isOfflineMode(),
+        client_timestamp: new Date().toISOString()
+      };
+
+      const res = await fetch('/api/attendance/checkin', {
+        method: 'POST',
+        headers: authHeaders('courserep'),
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return showToast(data.detail || 'Biometric verification failed', 'error');
+      }
+      showToast(data.message, 'success');
+      await refreshAllData();
+    }
+
+    async function syncOfflineQueueNow() {
+      if (state.offlineQueue.length === 0) {
+        return showToast('Offline queue is already empty!', 'success');
+      }
+      if (state.simulatedOffline) {
+        state.simulatedOffline = false;
+      }
+      try {
+        const res = await fetch('/api/attendance/sync-offline', {
+          method: 'POST',
+          headers: authHeaders('courserep'),
+          body: JSON.stringify({ records: state.offlineQueue })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          state.offlineQueue = [];
+          localStorage.setItem('eng_offline_attendance_queue', '[]');
+          updateNetworkUI();
+          showToast(data.message, 'success');
+          await refreshAllData();
+        } else {
+          showToast(data.detail || 'Failed to sync offline records', 'error');
+        }
+      } catch (e) {
+        showToast('Network unreachable. Records remain safely stored on device.', 'warn');
+      }
+    }
+
+    async function enrollStudentBiometric() {
+      const level = parseInt(document.getElementById('enrollLevel').value, 10);
+      const matric_no = document.getElementById('enrollMatric').value.trim().toUpperCase();
+      const full_name = document.getElementById('enrollName').value.trim();
+      const email = document.getElementById('enrollEmail').value.trim().toLowerCase();
+      const enrolled_by_rep = document.getElementById('enrollRepName').value.trim();
+
+      if (!matric_no || !full_name || !email || !email.includes('@')) {
+        return showToast('Please enter Matric Number, Full Name, and a valid Institutional Email.', 'error');
+      }
+      if (!state.pendingEnrollDescriptor || state.pendingEnrollDescriptor.length !== 128) {
+        return showToast('Mandatory 128D Master KYC Required: Click "1. Open Camera" and "2. Capture Master KYC Face" before enrolling!', 'error');
+      }
+
+      const res = await fetch('/api/students/enroll', {
+        method: 'POST',
+        headers: authHeaders('courserep'),
+        body: JSON.stringify({
+          department_id: state.selectedDeptId,
+          level,
+          matric_no,
+          full_name,
+          email,
+          face_descriptor: state.pendingEnrollDescriptor,
+          face_photo_b64: state.pendingEnrollPhotoB64,
+          enrolled_by_rep
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Enrollment failed', 'error');
+
+      document.getElementById('enrollMatric').value = '';
+      document.getElementById('enrollName').value = '';
+      document.getElementById('enrollEmail').value = '';
+      state.pendingEnrollDescriptor = null;
+      state.pendingEnrollPhotoB64 = null;
+      document.getElementById('enrollCaptureOverlay').classList.add('hidden');
+      showToast(data.message, 'success');
+      await refreshAllData();
+    }
+
+    // =========================================================================
+    // STUDENT PORTAL & OWN-PHONE OPAY-STYLE 128D KYC VERIFICATION CHECK-IN
+    // =========================================================================
+    async function lookupStudentDashboard() {
+      const matric = document.getElementById('studentLookupInput').value.trim().toUpperCase();
+      const box = document.getElementById('studentPersonalResult');
+      if (!matric) return;
+
+      const semParam = state.selectedSemester ? `&semester=${state.selectedSemester}` : '';
+      const res = await fetch(`/api/student/lookup?matric_no=${encodeURIComponent(matric)}${semParam}`);
+      const data = await res.json();
+      if (!res.ok) {
+        box.innerHTML = `<div class="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 text-xs text-rose-200">${data.detail || 'Student not found'}</div>`;
+        return;
+      }
+
+      const st = data.student;
+      const coursesHtml = data.courses.map(c => {
+        const badge = c.exam_eligible
+          ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">ELIGIBLE (≥70%)</span>`
+          : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold">BARRED (<70%)</span>`;
+        const semTag = c.semester === 2 ? '2nd Sem' : '1st Sem';
+        return `
+          <div class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-bold text-emerald-400">${c.course_code}</span>
+                <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">${semTag}</span>
+                <span class="text-sm font-semibold text-white">${c.course_title}</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">Lecturer: ${c.lecturer_name} • Attended: <b class="text-white font-mono">${c.attended} / ${c.total_sessions}</b> lectures</p>
+            </div>
+            <div class="text-right">
+              <div class="font-display text-lg font-bold ${c.exam_eligible ? 'text-emerald-400' : 'text-rose-400'}">${c.percentage}%</div>
+              ${badge}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const enrolledFaceHtml = st.face_photo_b64
+        ? `<img src="${st.face_photo_b64}" class="w-12 h-12 rounded-xl object-cover border-2 border-emerald-500/60" alt="Enrolled Face" />`
+        : `<div class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg">👤</div>`;
+
+      box.innerHTML = `
+        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center justify-between flex-wrap gap-3">
+          <div class="flex items-center gap-3">
+            ${enrolledFaceHtml}
+            <div>
+              <p class="text-xs font-mono text-emerald-400">${st.matric_no} • ${st.level} Level</p>
+              <h4 class="font-display text-lg font-bold text-white">${st.full_name}</h4>
+              <p class="text-xs text-slate-400">Department of ${st.department_name} (${st.department_code}) • <span class="font-mono text-slate-300">${st.email || ''}</span></p>
+            </div>
+          </div>
+          <div class="text-right text-xs font-mono">
+            <div class="${st.is_neural_128d ? 'text-emerald-400' : 'text-amber-400'}">${st.is_neural_128d ? '✓ Master 128D KYC Face Locked' : '⚠ Pending Course Rep 128D KYC'}</div>
+            <div class="text-teal-400">✓ Strict 1:1 &amp; 1:N Anti-Impersonation</div>
+          </div>
+        </div>
+        <div class="space-y-2.5">${coursesHtml || '<div class="p-4 text-center text-xs text-slate-500">No courses found for this semester filter.</div>'}</div>
+      `;
+    }
+
+    async function studentPasskeyCheckIn() {
+      const sessionUid = document.getElementById('studentSelfSessionSelect').value;
+      const matricNo = document.getElementById('studentSelfMatric').value.trim().toUpperCase();
+      const pinEl = document.getElementById('studentClassroomPinInput');
+      const classroomPin = pinEl ? pinEl.value.trim() : '';
+      if (!sessionUid || !matricNo) return showToast('Select an active class session first', 'error');
+
+      // Layer 1 Pre-Check: Require the 4-digit Classroom PIN called out by the Lecturer
+      if (!/^\d{4}$/.test(classroomPin)) {
+        if (pinEl) pinEl.focus();
+        return showToast('Layer 1 Classroom PIN Required: Enter the 4-digit PIN called out by your Course Lecturer inside the lecture hall!', 'error');
+      }
+
+      const btn = document.getElementById('studentLiveScanBtn');
+      const ring = document.getElementById('studentLivenessRing');
+      const overlay = document.getElementById('studentLastMatchOverlay');
+      const matchText = document.getElementById('studentMatchText');
+      const matchPct = document.getElementById('studentMatchPct');
+      const gpsBadge = document.getElementById('studentGpsBadge');
+
+      let liveCapture;
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<span>🔍</span> 2-Frame Liveness &amp; 128D KYC Check...';
+        }
+        if (ring) {
+          ring.className = 'w-36 h-44 rounded-full border-2 border-amber-400 shadow-[0_0_35px_rgba(251,191,36,0.35)] transition-all duration-300';
+        }
+        // Student Portal check-in strictly requires live video stream (no fallback image upload)
+        liveCapture = await extractLiveFace128DFromVideo('studentVideo', 'studentCanvas', null);
+      } catch (camErr) {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<span>🧬</span> 2. Verify My Face &amp; Sign In';
+        }
+        if (ring) {
+          ring.className = 'w-36 h-44 rounded-full border-2 border-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.35)] transition-all duration-300';
+        }
+        return showToast(camErr.message, 'error');
+      }
+
+      // Client-side pre-check against cached 128D KYC vector for immediate visual feedback
+      const enrolledVec = state.cachedTemplates[matricNo];
+      if (enrolledVec && enrolledVec.length === 128) {
+        const clientDist = computeClientEuclideanDistance(liveCapture.descriptor, enrolledVec);
+        const clientSim = computeClientCosineSimilarity(liveCapture.descriptor, enrolledVec);
+        if (clientDist > 0.42 || clientSim < 0.905) {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>🧬</span> 2. Verify My Face &amp; Sign In';
+          }
+          if (ring) {
+            ring.className = 'w-36 h-44 rounded-full border-2 border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.45)] transition-all duration-300';
+          }
+          if (overlay) {
+            overlay.classList.remove('hidden');
+            overlay.className = 'absolute bottom-2.5 left-2.5 right-2.5 px-3 py-2 rounded-xl bg-rose-950/95 border border-rose-500 text-xs text-rose-200 flex items-center justify-between';
+            matchText.textContent = `✕ Face Mismatch (L2: ${clientDist.toFixed(3)} > 0.42)`;
+            matchPct.textContent = `${(clientSim * 100).toFixed(1)}% REJECTED`;
+          }
+          return showToast(`OPay/KYC Face Mismatch! Your live face does not match ${matricNo}'s enrolled KYC face (L2 Distance: ${clientDist.toFixed(3)} > 0.42 max). Impersonation blocked!`, 'error');
+        }
+      }
+
+      try {
+        if (btn) {
+          btn.innerHTML = '<span>📍</span> Verifying Classroom GPS Geofence &amp; PIN...';
+        }
+        if (gpsBadge) {
+          gpsBadge.textContent = 'Acquiring GPS...';
+          gpsBadge.className = 'text-amber-300';
+        }
+        const gps = await getLiveGpsCoordinates(6000);
+        if (gps && gpsBadge) {
+          gpsBadge.textContent = `GPS Locked (±${Math.round(gps.accuracy || 15)}m)`;
+          gpsBadge.className = 'text-emerald-400';
+        } else if (gpsBadge) {
+          gpsBadge.textContent = 'GPS Not Shared';
+          gpsBadge.className = 'text-rose-400';
+        }
+
+        const passkeyId = `passkey-${matricNo.replace(/\//g, '-')}`;
+        const res = await fetch('/api/attendance/checkin', {
+          method: 'POST',
+          headers: authHeaders('student'),
+          body: JSON.stringify({
+            session_uid: sessionUid,
+            matric_no: matricNo,
+            classroom_pin: classroomPin,
+            latitude: gps ? gps.latitude : null,
+            longitude: gps ? gps.longitude : null,
+            gps_accuracy_m: gps ? gps.accuracy : null,
+            verification_method: 'FACE_BIOMETRIC_KIOSK',
+            face_descriptor: liveCapture.descriptor,
+            face_photo_b64: liveCapture.photoB64,
+            webauthn_credential_id: passkeyId,
+            captured_offline: false,
+            client_timestamp: new Date().toISOString()
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (ring) {
+            ring.className = 'w-36 h-44 rounded-full border-2 border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.45)] transition-all duration-300';
+          }
+          return showToast(data.detail || 'Live facial verification failed', 'error');
+        }
+
+        if (ring) {
+          ring.className = 'w-36 h-44 rounded-full border-2 border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.5)] transition-all duration-300';
+        }
+        const distInfo = data.record.distance_from_class_m !== null && data.record.distance_from_class_m !== undefined
+          ? ` • 📍 ${data.record.distance_from_class_m}m`
+          : '';
+        if (overlay) {
+          overlay.classList.remove('hidden');
+          overlay.className = 'absolute bottom-2.5 left-2.5 right-2.5 px-3 py-2 rounded-xl bg-emerald-950/95 border border-emerald-500/50 text-xs text-emerald-200 flex items-center justify-between';
+          matchText.textContent = `✓ ${data.record.full_name} (L2: ${data.record.euclidean_distance}${distInfo})`;
+          matchPct.textContent = `${(data.record.confidence_score * 100).toFixed(1)}% MATCH`;
+        }
+        if (pinEl) pinEl.value = '';
+
+        showToast(`Verified in class (PIN #${data.record.pin_generation_used || 1}/5${distInfo} • L2: ${data.record.euclidean_distance})! ${data.record.full_name} marked present.`, 'success');
+        await refreshAllData();
+        lookupStudentDashboard();
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<span>🧬</span> 2. Verify My Face &amp; Sign In';
+        }
+      }
+    }
+
+    // =========================================================================
+    // MODALS FOR HOD PROFILE, DEPARTMENTS & COURSES (ADD, EDIT, DELETE)
+    // =========================================================================
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function openEditHodProfileModal() {
+      if (!state.hodReport) return;
+      document.getElementById('editHodNameInput').value = state.hodReport.department.hod_name || '';
+      document.getElementById('editHodEmailInput').value = state.hodReport.department.hod_email || '';
+      document.getElementById('editHodPinInput').value = '';
+      openModal('editHodModal');
+    }
+
+    async function submitEditHodProfile() {
+      const hod_name = document.getElementById('editHodNameInput').value.trim();
+      const hod_email = document.getElementById('editHodEmailInput').value.trim();
+      const new_pin = document.getElementById('editHodPinInput').value.trim();
+      if (!hod_name) return showToast('Please enter the HOD Name', 'error');
+
+      const res = await fetch(`/api/departments/${state.selectedDeptId}/hod`, {
+        method: 'PUT',
+        headers: authHeaders('hod'),
+        body: JSON.stringify({ hod_name, hod_email, new_pin: new_pin || null })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Failed to update HOD profile', 'error');
+
+      closeModal('editHodModal');
+      showToast(data.message, 'success');
+      await loadDepartments();
+      await refreshAllData();
+    }
+
+    function openAddCourseModal() {
+      const currDept = state.departments.find(d => d.id === state.selectedDeptId);
+      const deptCode = currDept ? currDept.code : 'PEE';
+      const lvl = state.selectedLevel || 400;
+      const sem = state.selectedSemester || 1;
+      document.getElementById('newCourseCode').placeholder = `e.g. ${deptCode} ${lvl + (sem === 2 ? 2 : 1)}`;
+      document.getElementById('newCourseLevel').value = String(lvl);
+      document.getElementById('newCourseSemester').value = String(sem);
+      openModal('courseModal');
+    }
+
+    function openEditCourseModal(courseId, code, level, semester, title, lecturer) {
+      document.getElementById('editCourseId').value = courseId;
+      document.getElementById('editCourseCode').value = code;
+      document.getElementById('editCourseLevel').value = String(level);
+      document.getElementById('editCourseSemester').value = String(semester || 1);
+      document.getElementById('editCourseTitle').value = title;
+      document.getElementById('editCourseLecturer').value = lecturer;
+      document.getElementById('editCoursePin').value = '';
+      openModal('editCourseModal');
+    }
+
+    async function submitEditCourse() {
+      const courseId = parseInt(document.getElementById('editCourseId').value, 10);
+      const course_code = document.getElementById('editCourseCode').value.trim().toUpperCase();
+      const level = parseInt(document.getElementById('editCourseLevel').value, 10);
+      const semester = parseInt(document.getElementById('editCourseSemester').value, 10);
+      const course_title = document.getElementById('editCourseTitle').value.trim();
+      const lecturer_name = document.getElementById('editCourseLecturer').value.trim();
+      const lecturer_pin = document.getElementById('editCoursePin').value.trim();
+
+      if (!course_code || !course_title || !lecturer_name) {
+        return showToast('Please fill all course fields before saving.', 'error');
+      }
+
+      const res = await fetch(`/api/courses/${courseId}`, {
+        method: 'PUT',
+        headers: authHeaders('hod'),
+        body: JSON.stringify({
+          course_code,
+          level,
+          semester,
+          course_title,
+          lecturer_name,
+          lecturer_pin: lecturer_pin || null
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error updating course', 'error');
+
+      closeModal('editCourseModal');
+      showToast(data.message, 'success');
+      if (state.selectedSemester !== 0 && state.selectedSemester !== semester) {
+        setGlobalSemester(semester);
+      }
+      if (state.selectedLevel !== 0 && state.selectedLevel !== level) {
+        setGlobalLevel(level);
+      } else {
+        await refreshAllData();
+      }
+    }
+
+    async function deleteCurrentEditingCourse() {
+      const courseId = parseInt(document.getElementById('editCourseId').value, 10);
+      const courseCode = document.getElementById('editCourseCode').value;
+      if (!confirm(`Are you sure you want to permanently remove ${courseCode}?`)) return;
+
+      const res = await fetch(`/api/courses/${courseId}`, {
+        method: 'DELETE',
+        headers: authHeaders('hod')
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error deleting course', 'error');
+
+      closeModal('editCourseModal');
+      showToast(data.message, 'warn');
+      await refreshAllData();
+    }
+
+    async function submitNewDepartment() {
+      const code = document.getElementById('newDeptCode').value.trim().toUpperCase();
+      const name = document.getElementById('newDeptName').value.trim();
+      const hod_name = document.getElementById('newDeptHod').value.trim();
+      const hod_pin = document.getElementById('newDeptPin').value.trim() || '1234';
+      if (!code || !name || !hod_name) return showToast('Please fill all department fields', 'error');
+
+      const res = await fetch('/api/departments', {
+        method: 'POST',
+        headers: authHeaders('hod'),
+        body: JSON.stringify({ code, name, hod_name, hod_pin })
+      });
+      const data = await res.json();
+      if (!res.ok) return showToast(data.detail || 'Error creating department', 'error');
+
+      closeModal('deptModal');
+      showToast(data.message, 'success');
+      state.selectedDeptId = data.department.id;
+      await loadDepartments();
+      await refreshAllData();
+    }
+
+    async function submitNewCourse() {
+      const btn = document.getElementById('addCourseSubmitBtn');
+      if (btn && btn.disabled) return;
+      const course_code = document.getElementById('newCourseCode').value.trim().toUpperCase();
+      const level = parseInt(document.getElementById('newCourseLevel').value, 10);
+      const semester = parseInt(document.getElementById('newCourseSemester').value, 10);
+      const course_title = document.getElementById('newCourseTitle').value.trim();
+      const lecturer_name = document.getElementById('newCourseLecturer').value.trim();
+      const lecturer_pin = document.getElementById('newCoursePin').value.trim() || '1234';
+      if (!course_code || !course_title || !lecturer_name) return showToast('Fill all course fields', 'error');
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving Course...';
+      }
+      try {
+        const res = await fetch('/api/courses', {
+          method: 'POST',
+          headers: authHeaders('hod'),
+          body: JSON.stringify({
+            department_id: state.selectedDeptId,
+            course_code,
+            course_title,
+            level,
+            semester,
+            credit_units: 3,
+            lecturer_name,
+            lecturer_pin,
+            lecturer_staff_id: `STF-${course_code.replace(/\s+/g, '')}`
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) return showToast(data.detail || 'Error adding course', 'error');
+
+        closeModal('courseModal');
+        document.getElementById('newCourseCode').value = '';
+        document.getElementById('newCourseTitle').value = '';
+        document.getElementById('newCourseLecturer').value = '';
+        document.getElementById('newCoursePin').value = '1234';
+        showToast(data.message, data.already_existed ? 'warn' : 'success');
+        if (state.selectedSemester !== 0 && state.selectedSemester !== semester) {
+          setGlobalSemester(semester);
+        }
+        if (state.selectedLevel !== 0 && state.selectedLevel !== level) {
+          setGlobalLevel(level);
+        } else {
+          await refreshAllData();
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Add Departmental Course';
+        }
+      }
+    }
+
+    // Initialize App on Load & Live 1-Second Classroom PIN / 10-Minute Attendance Window Ticker
+    window.addEventListener('DOMContentLoaded', async () => {
+      updateNetworkUI();
+      await loadDepartments();
+      renderSecurityState();
+      await refreshAllData();
+
+      setInterval(() => {
+        if (!state.sessions || !state.sessions.length) return;
+        let hasActive = false;
+        let needsServerSync = false;
+        state.sessions.forEach(s => {
+          if (s.status === 'ACTIVE') {
+            hasActive = true;
+            if (s.pin_remaining_seconds > 0) {
+              s.pin_remaining_seconds -= 1;
+              if (s.pin_remaining_seconds === 0) {
+                s.pin_is_expired = true;
+                if ((s.pin_generation_count || 1) >= (s.max_pin_generations || 5)) {
+                  needsServerSync = true;
+                }
+              }
+            }
+            if (s.total_remaining_seconds > 0) {
+              s.total_remaining_seconds -= 1;
+              if (s.total_remaining_seconds === 0) {
+                needsServerSync = true;
+              }
+            }
+          }
+        });
+        if (needsServerSync) {
+          refreshAllData();
+        } else if (hasActive && state.activeTab === 'lecturer') {
+          renderSessionsList();
+        }
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

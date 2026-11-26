@@ -106,7 +106,7 @@
 
         <!-- Mobile-Only Compact Auth Lock Button in Top Corner -->
         <div class="flex sm:hidden items-center gap-1.5">
-          <button onclick="toggleSimulatedOffline()" id="networkBadgeBtnMobile" class="px-2.5 py-1.5 rounded-lg text-[11px] font-mono border bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+          <button onclick="toggleSimulatedOffline()" id="networkBadgeBtnMobile" class="px-2.5 py-1.5 rounded-lg text-[11px] font-mono border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 min-h-[44px]">
             Online
           </button>
         </div>
@@ -117,33 +117,33 @@
         <!-- Department Selector -->
         <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1 flex-1 sm:flex-initial min-w-[140px]">
           <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Dept:</span>
-          <select id="globalDeptSelect" onchange="onGlobalFilterChange()" class="bg-slate-900 text-xs font-semibold text-white focus:outline-none cursor-pointer w-full">
+          <select id="globalDeptSelect" onchange="onGlobalFilterChange()" class="bg-slate-900 text-base sm:text-xs font-semibold text-white focus:outline-none cursor-pointer w-full min-h-[44px]">
             <option value="">Loading...</option>
           </select>
         </div>
 
         <!-- Semester Switcher (1st Sem / 2nd Sem / All) -->
         <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl p-0.5 text-xs font-mono" title="Filter by Academic Semester">
-          <button onclick="setGlobalSemester(1)" id="semBtn-1" class="px-2.5 py-1.5 rounded-lg transition bg-teal-500 text-slate-950 font-bold">1st</button>
-          <button onclick="setGlobalSemester(2)" id="semBtn-2" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white">2nd</button>
-          <button onclick="setGlobalSemester(0)" id="semBtn-0" class="px-2 py-1.5 rounded-lg transition text-slate-300 hover:text-white">All</button>
+          <button onclick="setGlobalSemester(1)" id="semBtn-1" class="px-2.5 py-1.5 rounded-lg transition bg-teal-500 text-slate-950 font-bold min-h-[44px]">1st</button>
+          <button onclick="setGlobalSemester(2)" id="semBtn-2" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">2nd</button>
+          <button onclick="setGlobalSemester(0)" id="semBtn-0" class="px-2 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">All</button>
         </div>
 
         <!-- Level Filter (300L, 400L, 500L) -->
         <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl p-0.5 text-xs font-mono">
-          <button onclick="setGlobalLevel(300)" id="lvlBtn-300" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white">300L</button>
-          <button onclick="setGlobalLevel(400)" id="lvlBtn-400" class="px-2.5 py-1.5 rounded-lg transition bg-emerald-500 text-slate-950 font-bold">400L</button>
-          <button onclick="setGlobalLevel(500)" id="lvlBtn-500" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white">500L</button>
-          <button onclick="setGlobalLevel(0)" id="lvlBtn-0" class="px-2 py-1.5 rounded-lg transition text-slate-300 hover:text-white">ALL</button>
+          <button onclick="setGlobalLevel(300)" id="lvlBtn-300" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">300L</button>
+          <button onclick="setGlobalLevel(400)" id="lvlBtn-400" class="px-2.5 py-1.5 rounded-lg transition bg-emerald-500 text-slate-950 font-bold min-h-[44px]">400L</button>
+          <button onclick="setGlobalLevel(500)" id="lvlBtn-500" class="px-2.5 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">500L</button>
+          <button onclick="setGlobalLevel(0)" id="lvlBtn-0" class="px-2 py-1.5 rounded-lg transition text-slate-300 hover:text-white min-h-[44px]">ALL</button>
         </div>
 
         <!-- Online/Offline Toggle & Pending Sync Queue -->
-        <button onclick="toggleSimulatedOffline()" id="networkBadgeBtn" title="Click to test Lecture Hall Offline Mode" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+        <button onclick="toggleSimulatedOffline()" id="networkBadgeBtn" title="Click to test Lecture Hall Offline Mode" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer bg-emerald-500/10 border-emerald-500/30 text-emerald-300 min-h-[44px]">
           <span id="networkDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
           <span id="networkStatusText">Online</span>
         </button>
 
-        <button onclick="syncOfflineQueueNow()" id="syncQueueBtn" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 transition shadow-lg shadow-amber-500/20">
+        <button onclick="syncOfflineQueueNow()" id="syncQueueBtn" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 transition shadow-lg shadow-amber-500/20 min-h-[44px]">
           <span>Sync <span id="offlineCountBadge">0</span> Queued</span>
         </button>
       </div>
@@ -153,16 +153,16 @@
     <div class="max-w-7xl mx-auto px-3.5 sm:px-6 border-t border-slate-800/60 bg-slate-950/60 flex items-center justify-between gap-2 flex-wrap">
       <!-- Desktop / Tablet Role Tabs (Hidden on phones because phones use the Fixed Bottom Thumb-Zone Bar) -->
       <nav class="hidden sm:flex items-center gap-1 overflow-x-auto py-1.5 text-xs sm:text-sm font-medium">
-        <button onclick="switchRoleTab('hod')" id="tab-hod" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+        <button onclick="switchRoleTab('hod')" id="tab-hod" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold min-h-[44px]">
           <span id="lockIcon-hod">🔒</span> 1. Department HOD
         </button>
-        <button onclick="switchRoleTab('lecturer')" id="tab-lecturer" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+        <button onclick="switchRoleTab('lecturer')" id="tab-lecturer" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white min-h-[44px]">
           <span id="lockIcon-lecturer">🔒</span> 2. Course Lecturer
         </button>
-        <button onclick="switchRoleTab('courserep')" id="tab-courserep" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+        <button onclick="switchRoleTab('courserep')" id="tab-courserep" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white min-h-[44px]">
           <span id="lockIcon-courserep">🔒</span> 3. Level Course Rep
         </button>
-        <button onclick="switchRoleTab('student')" id="tab-student" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white">
+        <button onclick="switchRoleTab('student')" id="tab-student" class="role-tab px-3.5 py-2 rounded-lg transition whitespace-nowrap flex items-center gap-2 text-slate-400 hover:text-white min-h-[44px]">
           <span id="lockIcon-student">🔒</span> 4. Student Profile Portal
         </button>
       </nav>
@@ -170,7 +170,7 @@
       <!-- Active Security Session Status Pill -->
       <div id="activeAuthBar" class="flex items-center justify-between w-full sm:w-auto gap-2 py-1.5 text-xs font-mono">
         <span id="activeAuthLabel" class="text-amber-400 truncate">🔒 Portal Locked</span>
-        <button onclick="lockCurrentPortal()" id="logoutRoleBtn" class="hidden px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition">
+        <button onclick="lockCurrentPortal()" id="logoutRoleBtn" class="hidden px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition min-h-[44px]">
           Lock Portal
         </button>
       </div>
@@ -180,19 +180,19 @@
   <!-- MOBILE THUMB-ZONE BOTTOM NAVIGATION BAR (49pt+ Ergonomic Reach on Smartphones) -->
   <nav aria-label="Mobile Role Navigation" class="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 safe-bottom-nav no-print">
     <div class="grid grid-cols-4 gap-1 px-2 pt-1.5">
-      <button type="button" onclick="switchRoleTab('hod')" id="mob-tab-hod" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+      <button type="button" onclick="switchRoleTab('hod')" id="mob-tab-hod" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold min-h-[44px]">
         <span class="text-sm leading-none"><span id="mobLockIcon-hod">🔒</span> 🏛️</span>
         <span class="text-[11px] mt-1 leading-tight">1. HOD</span>
       </button>
-      <button type="button" onclick="switchRoleTab('lecturer')" id="mob-tab-lecturer" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400">
+      <button type="button" onclick="switchRoleTab('lecturer')" id="mob-tab-lecturer" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400 min-h-[44px]">
         <span class="text-sm leading-none"><span id="mobLockIcon-lecturer">🔒</span> 👨‍🏫</span>
         <span class="text-[11px] mt-1 leading-tight">2. Lecturer</span>
       </button>
-      <button type="button" onclick="switchRoleTab('courserep')" id="mob-tab-courserep" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400">
+      <button type="button" onclick="switchRoleTab('courserep')" id="mob-tab-courserep" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400 min-h-[44px]">
         <span class="text-sm leading-none"><span id="mobLockIcon-courserep">🔒</span> 🎓</span>
         <span class="text-[11px] mt-1 leading-tight">3. Rep KYC</span>
       </button>
-      <button type="button" onclick="switchRoleTab('student')" id="mob-tab-student" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400">
+      <button type="button" onclick="switchRoleTab('student')" id="mob-tab-student" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition text-slate-400 min-h-[44px]">
         <span class="text-sm leading-none"><span id="mobLockIcon-student">🔒</span> 🤳</span>
         <span class="text-[11px] mt-1 leading-tight">4. Student</span>
       </button>
@@ -225,12 +225,12 @@
         <div id="gateLecturerGroup" class="hidden space-y-3 p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30">
           <div>
             <label class="block text-xs text-emerald-300 font-semibold mb-1">1. Select Your Assigned Course (Synced from HOD Registry)</label>
-            <select id="gateLecturerCourseSelect" onchange="onGateLecturerCourseChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-mono text-white"></select>
+            <select id="gateLecturerCourseSelect" onchange="onGateLecturerCourseChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-base sm:text-xs sm:text-sm font-mono text-white"></select>
             <p class="text-[11px] text-slate-400 mt-1">Strict Data Isolation: Unlocking a course grants access <b>only</b> to that course's database and attendance records.</p>
           </div>
           <div>
             <label class="block text-xs text-teal-300 font-semibold mb-1">2. Select Lecturer Taking Class / Signing In Today</label>
-            <select id="gateLecturerNameSelect" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-3 py-2 text-xs sm:text-sm text-white font-medium"></select>
+            <select id="gateLecturerNameSelect" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-3 py-2 text-base sm:text-xs sm:text-sm text-white font-medium min-h-[44px]"></select>
             <p class="text-[11px] text-slate-400 mt-1">For co-taught courses (e.g. Prof. Oyeneyin & Engr. Omoregbe), every session & synced record logs which lecturer taught that day.</p>
           </div>
         </div>
@@ -239,7 +239,7 @@
         <div id="gateCourseRepGroup" class="hidden space-y-3 p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30">
           <div>
             <label class="block text-xs text-emerald-300 font-semibold mb-1">1. Select Your Assigned Level (Before Entering PIN) *</label>
-            <select id="gateCourseRepLevelSelect" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs sm:text-sm font-mono text-white">
+            <select id="gateCourseRepLevelSelect" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-base sm:text-xs sm:text-sm font-mono text-white">
               <option value="300">300 Level Course Rep Dashboard</option>
               <option value="400" selected>400 Level Course Rep Dashboard</option>
               <option value="500">500 Level Course Rep Dashboard</option>
@@ -250,19 +250,19 @@
 
         <div id="gatePinGroup">
           <label id="gatePinLabel" class="block text-xs text-slate-300 font-medium mb-1">Security Access PIN</label>
-          <input type="password" id="gatePinInput" placeholder="Enter 4-digit PIN (Default Demo PIN: 1234)" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
+          <input type="password" id="gatePinInput" placeholder="Enter 4-digit PIN (Default Demo PIN: 1234)" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-base sm:text-sm font-mono text-white" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
           <p id="gatePinHint" class="text-[11px] text-slate-400 mt-1">Default PIN for testing is <code class="text-emerald-400 font-mono">1234</code> (Each Course Lecturer & HOD can customize their private PIN inside the portal).</p>
         </div>
 
         <div id="gateStudentGroup" class="hidden">
           <label class="block text-xs text-slate-300 font-medium mb-1">Your Matriculation Number</label>
-          <input type="text" id="gateMatricInput" value="ENG/123/4567" placeholder="e.g. ENG/123/4567, UB6474386, B1222329, PG2307676" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-white uppercase" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
+          <input type="text" id="gateMatricInput" value="ENG/123/4567" placeholder="e.g. ENG/123/4567, UB6474386, B1222329, PG2307676" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-base sm:text-sm font-mono text-white uppercase" onkeydown="if(event.key==='Enter') submitPortalLogin()" />
           <div class="flex items-center gap-1.5 flex-wrap text-[11px] pt-2">
             <span class="text-slate-500">Quick Fill:</span>
-            <button type="button" onclick="document.getElementById('gateMatricInput').value='ENG/123/4567'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">ENG/123/4567</button>
-            <button type="button" onclick="document.getElementById('gateMatricInput').value='UB6474386'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">UB6474386</button>
-            <button type="button" onclick="document.getElementById('gateMatricInput').value='B1222329'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">B1222329</button>
-            <button type="button" onclick="document.getElementById('gateMatricInput').value='PG2307676'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono">PG2307676</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='ENG/123/4567'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono min-h-[44px]">ENG/123/4567</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='UB6474386'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono min-h-[44px]">UB6474386</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='B1222329'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono min-h-[44px]">B1222329</button>
+            <button type="button" onclick="document.getElementById('gateMatricInput').value='PG2307676'" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-300 font-mono min-h-[44px]">PG2307676</button>
           </div>
         </div>
 
@@ -286,22 +286,22 @@
           <h2 id="hodDeptHeading" class="font-display text-2xl sm:text-3xl font-bold text-white">Department of Petroleum Engineering (PEE)</h2>
           <div class="flex items-center gap-2 flex-wrap mt-1">
             <p id="hodNameSub" class="text-sm text-slate-300">Head of Department: Prof. E. O. Adewale</p>
-            <button onclick="openEditHodProfileModal()" class="no-print px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition">
+            <button onclick="openEditHodProfileModal()" class="no-print px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition min-h-[44px]">
               ⚙️ Edit HOD Name & PIN
             </button>
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2.5 no-print">
-          <button onclick="openModal('deptModal')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition">
+          <button onclick="openModal('deptModal')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition min-h-[44px]">
             + Register Engineering Dept
           </button>
-          <button onclick="openAddCourseModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition">
+          <button onclick="openAddCourseModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition min-h-[44px]">
             + Add 1st/2nd Sem Course
           </button>
-          <button onclick="exportHodCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition">
+          <button onclick="exportHodCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition min-h-[44px]">
             ⬇ Export Exam Eligibility CSV
           </button>
-          <button onclick="window.print()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-emerald-500/20">
+          <button onclick="window.print()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-emerald-500/20 min-h-[44px]">
             🖨️ Print Official HOD Exam Clearance List
           </button>
         </div>
@@ -335,12 +335,12 @@
       <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/70 p-3.5 rounded-xl border border-slate-800 no-print">
         <div class="flex items-center gap-3 flex-wrap">
           <label class="text-xs text-slate-400 font-medium">Filter Course:</label>
-          <select id="hodCourseSelect" onchange="loadHodEligibility()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none">
+          <select id="hodCourseSelect" onchange="loadHodEligibility()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-base sm:text-xs text-white focus:outline-none min-h-[44px]">
             <option value="">All Courses in Selected Level & Semester</option>
           </select>
 
           <label class="text-xs text-slate-400 font-medium ml-2">Status Filter:</label>
-          <select id="hodStatusFilter" onchange="renderHodCourses()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none">
+          <select id="hodStatusFilter" onchange="renderHodCourses()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-base sm:text-xs text-white focus:outline-none min-h-[44px]">
             <option value="ALL">Show All Students</option>
             <option value="BARRED">Show Only BARRED (<70%)</option>
             <option value="ELIGIBLE">Show Only ELIGIBLE (≥70%)</option>
@@ -383,13 +383,13 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2 no-print shrink-0">
-          <button onclick="openEditLecturerPinModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+          <button onclick="openEditLecturerPinModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition min-h-[44px]">
             🔐 Customize Course PIN & Co-Lecturers
           </button>
-          <button onclick="exportLecturerCourseCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+          <button onclick="exportLecturerCourseCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition min-h-[44px]">
             ⬇ Export My Course CSV
           </button>
-          <button onclick="lockCurrentPortal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition">
+          <button onclick="lockCurrentPortal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition min-h-[44px]">
             🔄 Switch Course / Lecturer
           </button>
         </div>
@@ -409,26 +409,26 @@
           <div class="space-y-3">
             <div>
               <label class="block text-xs text-emerald-400 font-semibold mb-1">Authenticated Course (Isolated Database)</label>
-              <select id="lecturerCourseSelect" disabled class="w-full bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-2 text-sm font-mono font-bold text-emerald-300 opacity-95 cursor-not-allowed"></select>
+              <select id="lecturerCourseSelect" disabled class="w-full bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-2 text-base sm:text-sm font-mono font-bold text-emerald-300 opacity-95 cursor-not-allowed min-h-[44px]"></select>
             </div>
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div class="col-span-1">
                 <label class="block text-xs text-slate-400 mb-1">Week #</label>
-                <input type="number" id="sessionWeekInput" value="6" min="1" max="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono" />
+                <input type="number" id="sessionWeekInput" value="6" min="1" max="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white font-mono min-h-[44px]" />
               </div>
               <div class="col-span-2">
                 <label class="block text-xs text-teal-300 font-semibold mb-1">Lecturer Taking Class Today *</label>
-                <select id="sessionStarterInput" onchange="onDutyLecturerSwitch(this.value)" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-3 py-2 text-sm text-white font-medium"></select>
+                <select id="sessionStarterInput" onchange="onDutyLecturerSwitch(this.value)" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-3 py-2 text-base sm:text-sm text-white font-medium min-h-[44px]"></select>
               </div>
             </div>
             <div>
               <label class="block text-xs text-slate-400 mb-1">Lecture Topic Taught Today</label>
-              <input type="text" id="sessionTopicInput" placeholder="e.g. Week 6: Pressure Transient Analysis & Well Testing" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input type="text" id="sessionTopicInput" placeholder="e.g. Week 6: Pressure Transient Analysis & Well Testing" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
             </div>
             <div class="p-3 rounded-xl bg-slate-950/90 border border-teal-500/30 space-y-2">
               <div class="flex items-center justify-between gap-2">
                 <label class="text-xs font-semibold text-teal-300">📍 Layer 2: Classroom GPS Geofence Radius</label>
-                <select id="sessionGeofenceRadius" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-emerald-300">
+                <select id="sessionGeofenceRadius" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-base sm:text-xs font-mono text-emerald-300 min-h-[44px]">
                   <option value="100">100m (Lecture Room)</option>
                   <option value="150" selected>150m (Hall + Corridor)</option>
                   <option value="250">250m (Faculty Complex)</option>
@@ -451,7 +451,7 @@
               <h3 id="lecturerSessionsLogHeading" class="font-display text-lg font-bold text-white">My Course Lecture Sessions & Co-Lecturer Log</h3>
               <p class="text-xs text-slate-400">Shows only sessions for your assigned course, clearly recording which lecturer taught and took attendance each day.</p>
             </div>
-            <button onclick="loadSessionsList()" class="text-xs text-emerald-400 hover:underline">↻ Refresh</button>
+            <button onclick="loadSessionsList()" class="text-xs text-emerald-400 hover:underline min-h-[44px]">↻ Refresh</button>
           </div>
           <div id="sessionsListContainer" class="space-y-3 max-h-[420px] overflow-y-auto pr-1"></div>
         </div>
@@ -483,10 +483,10 @@
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2 shrink-0 no-print">
-          <button onclick="openEditCourseRepModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+          <button onclick="openEditCourseRepModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition min-h-[44px]">
             🔐 Customize Level Rep Name &amp; PIN
           </button>
-          <button onclick="lockCurrentPortal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition">
+          <button onclick="lockCurrentPortal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition min-h-[44px]">
             🔄 Switch Level
           </button>
         </div>
@@ -524,7 +524,7 @@
                 <p class="text-[11px] text-slate-400 max-w-xs mx-auto">
                   Center classmate's face inside the oval guide. Extracts 68 landmarks &amp; a 128D ResNet-34 neural vector.
                 </p>
-                <button type="button" onclick="startEnrollCamera()" class="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-xs font-semibold text-emerald-300 border border-emerald-500/40 transition">
+                <button type="button" onclick="startEnrollCamera()" class="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-xs font-semibold text-emerald-300 border border-emerald-500/40 transition min-h-[44px]">
                   📷 1. Activate Enrollment Camera
                 </button>
               </div>
@@ -540,21 +540,21 @@
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-              <button type="button" onclick="startEnrollCamera()" class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button type="button" onclick="startEnrollCamera()" class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition min-h-[44px]">
                 📷 Open Camera
               </button>
-              <button type="button" onclick="captureEnrollmentFaceSnapshot()" id="captureEnrollFaceBtn" class="py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 transition">
+              <button type="button" onclick="captureEnrollmentFaceSnapshot()" id="captureEnrollFaceBtn" class="py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 transition min-h-[44px]">
                 📸 2. Capture Master KYC Face
               </button>
             </div>
           </div>
 
           <div class="space-y-3">
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div>
                 <label class="block text-xs text-emerald-400 font-semibold mb-1">Authenticated Level</label>
-                <select id="enrollLevel" disabled class="w-full bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold cursor-not-allowed">
+                <select id="enrollLevel" disabled class="w-full bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-2 text-base sm:text-xs text-emerald-300 font-mono font-bold cursor-not-allowed min-h-[44px]">
                   <option value="300">🔒 300 Level</option>
                   <option value="400" selected>🔒 400 Level</option>
                   <option value="500">🔒 500 Level</option>
@@ -562,21 +562,21 @@
               </div>
               <div class="col-span-2">
                 <label class="block text-xs text-slate-400 mb-1">Matric No (Any Official Format)</label>
-                <input type="text" id="enrollMatric" placeholder="ENG/123/4567, UB6474386, B1222329, PG2307676" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white uppercase" />
+                <input type="text" id="enrollMatric" placeholder="ENG/123/4567, UB6474386, B1222329, PG2307676" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white uppercase min-h-[44px]" />
                 <p class="text-[10px] text-slate-500 mt-0.5">Supports ENG/123/4567, UB..., B..., PG..., etc.</p>
               </div>
             </div>
             <div>
               <label class="block text-xs text-slate-400 mb-1">Student Full Name</label>
-              <input type="text" id="enrollName" placeholder="e.g. Chukwudi Okafor" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+              <input type="text" id="enrollName" placeholder="e.g. Chukwudi Okafor" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white min-h-[44px]" />
             </div>
             <div>
               <label class="block text-xs text-emerald-400 font-medium mb-1">Institutional Email Address (Required for HOD Warnings) *</label>
-              <input type="email" id="enrollEmail" placeholder="e.g. chukwudi.okafor@eng.uniben.edu" required class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+              <input type="email" id="enrollEmail" placeholder="e.g. chukwudi.okafor@eng.uniben.edu" required class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white min-h-[44px]" />
             </div>
             <div>
               <label class="block text-xs text-slate-400 mb-1">Enrolling Level Course Rep Name</label>
-              <input type="text" id="enrollRepName" value="400L Course Rep" readonly class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-300 font-medium" />
+              <input type="text" id="enrollRepName" value="400L Course Rep" readonly class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-base sm:text-xs text-emerald-300 font-medium min-h-[44px]" />
             </div>
 
             <button onclick="enrollStudentBiometric()" class="w-full py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition shadow-lg shadow-teal-500/20">
@@ -622,8 +622,8 @@
           </p>
 
           <div class="flex flex-wrap gap-2">
-            <input type="text" id="studentLookupInput" value="ENG/123/4567" readonly class="flex-1 bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 text-sm font-mono text-emerald-300 uppercase" />
-            <button onclick="lockCurrentPortal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition">
+            <input type="text" id="studentLookupInput" value="ENG/123/4567" readonly class="flex-1 bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2 text-base sm:text-sm font-mono text-emerald-300 uppercase min-h-[44px]" />
+            <button onclick="lockCurrentPortal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition min-h-[44px]">
               Switch Student Account
             </button>
           </div>
@@ -647,16 +647,16 @@
           <div class="space-y-3">
             <div>
               <label class="block text-xs text-slate-400 mb-1">Active Class Session (Only Live Unlocked Sessions)</label>
-              <select id="studentSelfSessionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white"></select>
+              <select id="studentSelfSessionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white min-h-[44px]"></select>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label class="block text-xs text-slate-400 mb-1">Authenticated Matric Number</label>
-                <input type="text" id="studentSelfMatric" value="ENG/123/4567" readonly class="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-400 uppercase" />
+                <input type="text" id="studentSelfMatric" value="ENG/123/4567" readonly class="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-emerald-400 uppercase min-h-[44px]" />
               </div>
               <div>
                 <label class="block text-xs text-amber-300 font-semibold mb-1">🔑 4-Digit Classroom PIN *</label>
-                <input type="text" id="studentClassroomPinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 4829" class="w-full bg-slate-950 border border-amber-500/50 focus:border-emerald-400 rounded-xl px-3 py-2 text-sm font-mono font-bold tracking-[0.25em] text-amber-300 text-center" />
+                <input type="text" id="studentClassroomPinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 4829" class="w-full bg-slate-950 border border-amber-500/50 focus:border-emerald-400 rounded-xl px-3 py-2 text-base sm:text-sm font-mono font-bold tracking-[0.25em] text-amber-300 text-center min-h-[44px]" />
               </div>
             </div>
             <div id="studentGeofenceStatusBar" class="px-3 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between text-[11px] font-mono">
@@ -683,7 +683,7 @@
                 <p class="text-[11px] text-slate-400 max-w-xs mx-auto">
                   Position your face inside the oval ring in good lighting. Multi-frame liveness &amp; 1:N anti-impersonation are enforced.
                 </p>
-                <button type="button" onclick="startStudentCamera()" class="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-xs font-semibold text-emerald-300 border border-emerald-500/40 transition">
+                <button type="button" onclick="startStudentCamera()" class="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-xs font-semibold text-emerald-300 border border-emerald-500/40 transition min-h-[44px]">
                   📷 1. Open My Phone Camera
                 </button>
               </div>
@@ -699,7 +699,7 @@
               </div>
             </div>
 
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button type="button" onclick="startStudentCamera()" class="col-span-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition">
                 📷 Camera On
               </button>
@@ -728,15 +728,15 @@
       <div class="space-y-3">
         <div>
           <label class="block text-xs text-slate-400 mb-1">Official Head of Department (HOD) Name</label>
-          <input type="text" id="editHodNameInput" placeholder="e.g. Prof. E. O. Adewale" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="editHodNameInput" placeholder="e.g. Prof. E. O. Adewale" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Official HOD Institutional Email</label>
-          <input type="email" id="editHodEmailInput" placeholder="e.g. hod.pee@eng.uniben.edu" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+          <input type="email" id="editHodEmailInput" placeholder="e.g. hod.pee@eng.uniben.edu" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">New HOD Security PIN (Leave blank to keep current PIN)</label>
-          <input type="password" id="editHodPinInput" placeholder="Enter new 4+ digit PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+          <input type="password" id="editHodPinInput" placeholder="Enter new 4+ digit PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
         </div>
         <button onclick="submitEditHodProfile()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
           💾 Save HOD Profile & PIN
@@ -755,19 +755,19 @@
       <div class="space-y-3">
         <div>
           <label class="block text-xs text-slate-400 mb-1">Department Short Code (3 Letters)</label>
-          <input type="text" id="newDeptCode" placeholder="e.g. BME" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white uppercase" />
+          <input type="text" id="newDeptCode" placeholder="e.g. BME" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white uppercase min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Full Department Name</label>
-          <input type="text" id="newDeptName" placeholder="e.g. Biomedical Engineering" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="newDeptName" placeholder="e.g. Biomedical Engineering" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Head of Department (HOD) Name</label>
-          <input type="text" id="newDeptHod" placeholder="e.g. Prof. S. A. Lawal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="newDeptHod" placeholder="e.g. Prof. S. A. Lawal" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">HOD Security PIN for this Department</label>
-          <input type="password" id="newDeptPin" value="1234" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+          <input type="password" id="newDeptPin" value="1234" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
         </div>
         <button onclick="submitNewDepartment()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm">
           Save Department to Registry
@@ -784,14 +784,14 @@
         <button onclick="closeModal('courseModal')" aria-label="Close modal" class="w-11 h-11 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition">✕</button>
       </div>
       <div class="space-y-3">
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div>
             <label class="block text-xs text-slate-400 mb-1">Course Code</label>
-            <input type="text" id="newCourseCode" placeholder="e.g. PEE 405" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white uppercase" />
+            <input type="text" id="newCourseCode" placeholder="e.g. PEE 405" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white uppercase min-h-[44px]" />
           </div>
           <div>
             <label class="block text-xs text-slate-400 mb-1">Level</label>
-            <select id="newCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+            <select id="newCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white font-mono min-h-[44px]">
               <option value="300">300 Level</option>
               <option value="400" selected>400 Level</option>
               <option value="500">500 Level</option>
@@ -799,7 +799,7 @@
           </div>
           <div>
             <label class="block text-xs text-teal-300 font-semibold mb-1">Semester *</label>
-            <select id="newCourseSemester" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-2.5 py-2 text-xs text-white font-mono">
+            <select id="newCourseSemester" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-2.5 py-2 text-base sm:text-xs text-white font-mono min-h-[44px]">
               <option value="1">1st Semester</option>
               <option value="2">2nd Semester</option>
             </select>
@@ -807,15 +807,15 @@
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Course Title</label>
-          <input type="text" id="newCourseTitle" placeholder="e.g. Directional Drilling & Well Completion" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="newCourseTitle" placeholder="e.g. Directional Drilling & Well Completion" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Course Lecturer(s) (Separate Co-Lecturers with &amp; or ,)</label>
-          <input type="text" id="newCourseLecturer" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="newCourseLecturer" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Initial Course Lecturer Access PIN</label>
-          <input type="password" id="newCoursePin" value="1234" placeholder="Default: 1234" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+          <input type="password" id="newCoursePin" value="1234" placeholder="Default: 1234" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white min-h-[44px]" />
         </div>
         <button onclick="submitNewCourse()" id="addCourseSubmitBtn" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
           Add Departmental Course
@@ -837,14 +837,14 @@
       <p class="text-xs text-slate-400">Edit the course details or co-lecturers assigned to this course:</p>
       <input type="hidden" id="editCourseId" />
       <div class="space-y-3">
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div>
             <label class="block text-xs text-slate-400 mb-1">Course Code</label>
-            <input type="text" id="editCourseCode" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white uppercase" />
+            <input type="text" id="editCourseCode" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white uppercase min-h-[44px]" />
           </div>
           <div>
             <label class="block text-xs text-slate-400 mb-1">Level</label>
-            <select id="editCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono">
+            <select id="editCourseLevel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs text-white font-mono min-h-[44px]">
               <option value="300">300 Level</option>
               <option value="400">400 Level</option>
               <option value="500">500 Level</option>
@@ -852,7 +852,7 @@
           </div>
           <div>
             <label class="block text-xs text-teal-300 font-semibold mb-1">Semester</label>
-            <select id="editCourseSemester" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-2.5 py-2 text-xs text-white font-mono">
+            <select id="editCourseSemester" class="w-full bg-slate-950 border border-teal-500/40 rounded-xl px-2.5 py-2 text-base sm:text-xs text-white font-mono min-h-[44px]">
               <option value="1">1st Semester</option>
               <option value="2">2nd Semester</option>
             </select>
@@ -860,15 +860,15 @@
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Course Title</label>
-          <input type="text" id="editCourseTitle" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="editCourseTitle" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Assigned Course Lecturer(s) (Separate Co-Lecturers with &amp; or ,)</label>
-          <input type="text" id="editCourseLecturer" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="editCourseLecturer" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Reset Course Lecturer PIN (Leave blank to keep current PIN)</label>
-          <input type="password" id="editCoursePin" placeholder="Enter new 4+ digit Course PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+          <input type="password" id="editCoursePin" placeholder="Enter new 4+ digit Course PIN" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-xs font-mono text-white min-h-[44px]" />
         </div>
         <div class="flex items-center gap-2 pt-1">
           <button onclick="submitEditCourse()" class="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
@@ -898,11 +898,11 @@
       <div class="space-y-3">
         <div>
           <label class="block text-xs text-slate-400 mb-1">Assigned Lecturer(s) for This Course (Separate Co-Lecturers with &amp; or ,)</label>
-          <input type="text" id="editLecturerCourseNamesInput" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="editLecturerCourseNamesInput" placeholder="e.g. Prof. Oyeneyin & Engr. Omoregbe" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-emerald-400 font-semibold mb-1">New Private Course Lecturer PIN (4+ digits/characters) *</label>
-          <input type="password" id="editLecturerCoursePinInput" placeholder="Enter private PIN for this course" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+          <input type="password" id="editLecturerCoursePinInput" placeholder="Enter private PIN for this course" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
         </div>
         <button onclick="submitLecturerCoursePinUpdate()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
           🔐 Save Private Course PIN &amp; Co-Lecturers
@@ -927,15 +927,15 @@
       <div class="space-y-3">
         <div>
           <label class="block text-xs text-slate-400 mb-1">Level Course Rep Full Name</label>
-          <input type="text" id="editCourseRepNameInput" placeholder="e.g. Emmanuel Nsofor" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <input type="text" id="editCourseRepNameInput" placeholder="e.g. Emmanuel Nsofor" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm text-white min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-slate-400 mb-1">Level Course Rep Matric No</label>
-          <input type="text" id="editCourseRepMatricInput" placeholder="e.g. ENG/123/4567" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white uppercase" />
+          <input type="text" id="editCourseRepMatricInput" placeholder="e.g. ENG/123/4567" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white uppercase min-h-[44px]" />
         </div>
         <div>
           <label class="block text-xs text-emerald-400 font-semibold mb-1">New Level Course Rep PIN (Leave blank to keep current PIN)</label>
-          <input type="password" id="editCourseRepPinInput" placeholder="Enter new 4+ digit PIN for this level" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-sm font-mono text-white" />
+          <input type="password" id="editCourseRepPinInput" placeholder="Enter new 4+ digit PIN for this level" class="w-full bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-base sm:text-sm font-mono text-white min-h-[44px]" />
         </div>
         <button onclick="submitEditCourseRepProfile()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-emerald-500/20">
           💾 Save Level Course Rep Profile &amp; PIN
@@ -1542,7 +1542,7 @@
               <td class="py-3 px-4 font-mono text-xs font-semibold text-white">${st.matric_no}</td>
               <td class="py-3 px-4 text-sm text-slate-200">${st.full_name}</td>
               <td class="py-3 px-4 font-mono text-xs text-slate-400">
-                <a href="mailto:${instEmail}?subject=HOD%20Attendance%20Warning%20(${encodeURIComponent(course.course_code)})" class="hover:text-emerald-400 underline decoration-slate-700" title="Click to email student warning">${instEmail}</a>
+                <a href="mailto:${instEmail}?subject=HOD%20Attendance%20Warning%20(${encodeURIComponent(course.course_code)})" class="hover:text-emerald-400 underline decoration-slate-700 min-h-[44px]" title="Click to email student warning">${instEmail}</a>
               </td>
               <td class="py-3 px-4 text-xs">
                 ${st.biometric_enrolled
@@ -1588,7 +1588,7 @@
                   <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-xs">${course.level} Level</span>
                   ${semBadge}
                   <h3 class="font-display font-bold text-base sm:text-lg text-white">${course.course_title}</h3>
-                  <button onclick="openEditCourseModal(${course.course_id}, '${safeCode}', ${course.level}, ${course.semester || 1}, '${safeTitle}', '${safeLecturer}')" class="no-print ml-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition flex items-center gap-1">
+                  <button onclick="openEditCourseModal(${course.course_id}, '${safeCode}', ${course.level}, ${course.semester || 1}, '${safeTitle}', '${safeLecturer}')" class="no-print ml-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium transition flex items-center gap-1 min-h-[44px]">
                     ✏️ Edit / Remove Course
                   </button>
                 </div>
@@ -1995,7 +1995,7 @@
             </div>
             <div class="flex flex-wrap items-center gap-2">
               ${genCount < maxGen ? `
-                <button onclick="regenerateClassroomPin('${s.session_uid}')" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-md">
+                <button onclick="regenerateClassroomPin('${s.session_uid}')" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-md min-h-[44px]">
                   🔄 Generate Next 4-Digit PIN (#${genCount + 1}/${maxGen})
                 </button>
               ` : `
@@ -2003,7 +2003,7 @@
                   Max 5/5 PINs Used
                 </span>
               `}
-              <button onclick="closeLectureSession('${s.session_uid}')" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition">
+              <button onclick="closeLectureSession('${s.session_uid}')" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition min-h-[44px]">
                 🔒 Permanently Lock Session
               </button>
             </div>
@@ -2033,7 +2033,7 @@
               </div>
               <div class="flex items-center gap-2">
                 ${s.status === 'ACTIVE' ? `
-                  <button onclick="openSessionInKiosk('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition">
+                  <button onclick="openSessionInKiosk('${s.session_uid}')" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition min-h-[44px]">
                     📱 Student Self-Sign
                   </button>
                 ` : `
